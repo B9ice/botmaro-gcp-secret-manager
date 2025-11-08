@@ -1,0 +1,313 @@
+"""Core secret management logic."""
+
+import os
+from typing import Dict, List, Optional, Tuple
+from pathlib import Path
+from .config import SecretsConfig, EnvironmentConfig, ProjectConfig
+from .gsm import GSMClient
+
+
+class SecretsManager:
+    """Main secrets manager class."""
+
+    def __init__(self, config: Optional[SecretsConfig] = None):
+        """
+        Initialize secrets manager.
+
+        Args:
+            config: SecretsConfig instance or None to load from env/file
+        """
+        self.config = config or SecretsConfig.from_env()
+        self._gsm_clients: Dict[str, GSMClient] = {}
+
+    def _get_gsm_client(self, project_id: str) -> GSMClient:
+        """Get or create a GSM client for a project."""
+        if project_id not in self._gsm_clients:
+            self._gsm_clients[project_id] = GSMClient(project_id)
+        return self._gsm_clients[project_id]
+
+    def _get_secret_name(self, env: str, project: Optional[str], secret: str) -> str:
+        """
+        Generate the full secret name in GSM.
+
+        Uses double-hyphen (--) convention for hierarchical separation:
+        - Environment-scoped: {prefix}--{SECRET_NAME}
+        - Project-scoped: {prefix}--{project}--{SECRET_NAME}
+
+        This allows unambiguous parsing: secret_id.split('--')
+
+        Args:
+            env: Environment name
+            project: Optional project name
+            secret: Secret name
+
+        Returns:
+            Full secret ID for GSM
+
+        Examples:
+            >>> _get_secret_name("staging", None, "API_KEY")
+            "botmaro-staging--API_KEY"
+            >>> _get_secret_name("staging", "orchestrator", "DATABASE_URL")
+            "botmaro-staging--orchestrator--DATABASE_URL"
+        """
+        env_config = self.config.get_environment(env)
+        if not env_config:
+            raise ValueError(f"Environment '{env}' not found in configuration")
+
+        prefix = env_config.prefix or f"botmaro-{env}"
+
+        if project:
+            return f"{prefix}--{project}--{secret}"
+        else:
+            return f"{prefix}--{secret}"
+
+    def bootstrap(
+        self,
+        env: str,
+        project: Optional[str] = None,
+        export_to_env: bool = True,
+        runtime_sa: Optional[str] = None,
+        deployer_sa: Optional[str] = None,
+    ) -> Dict[str, str]:
+        """
+        Bootstrap an environment by loading all secrets.
+
+        Args:
+            env: Environment name (staging, prod, etc.)
+            project: Optional project name to scope to
+            export_to_env: Whether to export secrets to os.environ
+            runtime_sa: Optional runtime service account to grant access
+            deployer_sa: Optional deployer service account to grant access
+
+        Returns:
+            Dict of secret names to values
+        """
+        env_config = self.config.get_environment(env)
+        if not env_config:
+            raise ValueError(f"Environment '{env}' not found")
+
+        gsm = self._get_gsm_client(env_config.gcp_project)
+        secrets = {}
+
+        # Load global secrets
+        for secret_config in env_config.global_secrets:
+            secret_name = self._get_secret_name(env, None, secret_config.name)
+            value = gsm.get_secret_version(secret_name)
+
+            if value is None:
+                if secret_config.required and secret_config.default is None:
+                    raise ValueError(f"Required secret '{secret_name}' not found")
+                value = secret_config.default or ""
+
+            secrets[secret_config.name] = value
+
+            if export_to_env:
+                os.environ[secret_config.name] = value
+
+        # Load project-specific secrets if project is specified
+        if project:
+            project_config = env_config.projects.get(project)
+            if not project_config:
+                raise ValueError(f"Project '{project}' not found in environment '{env}'")
+
+            for secret_config in project_config.secrets:
+                secret_name = self._get_secret_name(env, project, secret_config.name)
+                value = gsm.get_secret_version(secret_name)
+
+                if value is None:
+                    if secret_config.required and secret_config.default is None:
+                        raise ValueError(f"Required secret '{secret_name}' not found")
+                    value = secret_config.default or ""
+
+                secrets[secret_config.name] = value
+
+                if export_to_env:
+                    os.environ[secret_config.name] = value
+
+        # Grant access to service accounts if specified
+        if runtime_sa or deployer_sa:
+            for secret_name in secrets.keys():
+                full_secret_name = self._get_secret_name(env, project, secret_name)
+                if runtime_sa:
+                    gsm.grant_access(full_secret_name, f"serviceAccount:{runtime_sa}")
+                if deployer_sa:
+                    gsm.grant_access(full_secret_name, f"serviceAccount:{deployer_sa}")
+
+        return secrets
+
+    def set_secret(
+        self,
+        env: str,
+        secret: str,
+        value: str,
+        project: Optional[str] = None,
+        grant_to: Optional[List[str]] = None,
+    ) -> Dict[str, str]:
+        """
+        Set a secret value (create or update).
+
+        Args:
+            env: Environment name
+            secret: Secret name
+            value: Secret value
+            project: Optional project name
+            grant_to: Optional list of service accounts to grant access
+
+        Returns:
+            Dict with status information
+        """
+        env_config = self.config.get_environment(env)
+        if not env_config:
+            raise ValueError(f"Environment '{env}' not found")
+
+        gsm = self._get_gsm_client(env_config.gcp_project)
+        secret_name = self._get_secret_name(env, project, secret)
+
+        result = gsm.ensure_secret(secret_name, value)
+
+        # Grant access to specified service accounts
+        if grant_to:
+            for sa in grant_to:
+                if not sa.startswith("serviceAccount:"):
+                    sa = f"serviceAccount:{sa}"
+                gsm.grant_access(secret_name, sa)
+
+        return result
+
+    def get_secret(
+        self, env: str, secret: str, project: Optional[str] = None, version: str = "latest"
+    ) -> Optional[str]:
+        """
+        Get a secret value.
+
+        Args:
+            env: Environment name
+            secret: Secret name
+            project: Optional project name
+            version: Version to retrieve (default: latest)
+
+        Returns:
+            Secret value or None if not found
+        """
+        env_config = self.config.get_environment(env)
+        if not env_config:
+            raise ValueError(f"Environment '{env}' not found")
+
+        gsm = self._get_gsm_client(env_config.gcp_project)
+        secret_name = self._get_secret_name(env, project, secret)
+
+        return gsm.get_secret_version(secret_name, version)
+
+    def delete_secret(self, env: str, secret: str, project: Optional[str] = None) -> bool:
+        """
+        Delete a secret.
+
+        Args:
+            env: Environment name
+            secret: Secret name
+            project: Optional project name
+
+        Returns:
+            True if deleted, False if not found
+        """
+        env_config = self.config.get_environment(env)
+        if not env_config:
+            raise ValueError(f"Environment '{env}' not found")
+
+        gsm = self._get_gsm_client(env_config.gcp_project)
+        secret_name = self._get_secret_name(env, project, secret)
+
+        return gsm.delete_secret(secret_name)
+
+    def list_secrets(
+        self, env: str, project: Optional[str] = None
+    ) -> List[Tuple[str, Optional[str]]]:
+        """
+        List all secrets for an environment.
+
+        Args:
+            env: Environment name
+            project: Optional project name to filter by
+
+        Returns:
+            List of (secret_name, value) tuples
+        """
+        env_config = self.config.get_environment(env)
+        if not env_config:
+            raise ValueError(f"Environment '{env}' not found")
+
+        gsm = self._get_gsm_client(env_config.gcp_project)
+        prefix = env_config.prefix or f"botmaro-{env}"
+
+        # Build filter - use double-hyphen convention
+        if project:
+            filter_str = f"name:{prefix}--{project}--"
+        else:
+            filter_str = f"name:{prefix}--"
+
+        secret_ids = gsm.list_secrets(filter_str)
+
+        results = []
+        for secret_id in secret_ids:
+            # Parse using double-hyphen separator
+            parts = secret_id.split("--")
+
+            if project:
+                # Expected format: prefix--project--secret
+                if len(parts) >= 3:
+                    name = "--".join(parts[2:])  # Handle secrets with -- in name
+                else:
+                    name = secret_id  # Fallback
+            else:
+                # Expected format: prefix--secret
+                if len(parts) >= 2:
+                    name = "--".join(parts[1:])  # Handle secrets with -- in name
+                else:
+                    name = secret_id  # Fallback
+
+            value = gsm.get_secret_version(secret_id)
+            results.append((name, value))
+
+        return results
+
+    def grant_access_bulk(
+        self,
+        env: str,
+        service_accounts: List[str],
+        project: Optional[str] = None,
+    ) -> Dict[str, int]:
+        """
+        Grant access to all secrets in an environment or project.
+
+        Args:
+            env: Environment name
+            service_accounts: List of service account emails to grant access
+            project: Optional project name to scope to
+
+        Returns:
+            Dict with count of secrets updated
+        """
+        env_config = self.config.get_environment(env)
+        if not env_config:
+            raise ValueError(f"Environment '{env}' not found")
+
+        gsm = self._get_gsm_client(env_config.gcp_project)
+        prefix = env_config.prefix or f"botmaro-{env}"
+
+        # Build filter - use double-hyphen convention
+        if project:
+            filter_str = f"name:{prefix}--{project}--"
+        else:
+            filter_str = f"name:{prefix}--"
+
+        secret_ids = gsm.list_secrets(filter_str)
+
+        count = 0
+        for secret_id in secret_ids:
+            for sa in service_accounts:
+                if not sa.startswith("serviceAccount:"):
+                    sa = f"serviceAccount:{sa}"
+                gsm.grant_access(secret_id, sa)
+            count += 1
+
+        return {"secrets_updated": count, "service_accounts": len(service_accounts)}
