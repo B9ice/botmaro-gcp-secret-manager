@@ -250,18 +250,18 @@ class SecretsManager:
         results = []
         for secret_id in secret_ids:
             # Parse using double-hyphen separator
-            parts = secret_id.split('--')
+            parts = secret_id.split("--")
 
             if project:
                 # Expected format: prefix--project--secret
                 if len(parts) >= 3:
-                    name = '--'.join(parts[2:])  # Handle secrets with -- in name
+                    name = "--".join(parts[2:])  # Handle secrets with -- in name
                 else:
                     name = secret_id  # Fallback
             else:
                 # Expected format: prefix--secret
                 if len(parts) >= 2:
-                    name = '--'.join(parts[1:])  # Handle secrets with -- in name
+                    name = "--".join(parts[1:])  # Handle secrets with -- in name
                 else:
                     name = secret_id  # Fallback
 

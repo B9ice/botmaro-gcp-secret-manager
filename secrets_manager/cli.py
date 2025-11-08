@@ -30,7 +30,7 @@ def parse_target(target: str) -> tuple[str, Optional[str], str]:
         'staging.myproject.MY_SECRET' -> ('staging', 'myproject', 'MY_SECRET')
         'staging.MY_SECRET' -> ('staging', None, 'MY_SECRET')
     """
-    parts = target.split('.')
+    parts = target.split(".")
 
     if len(parts) == 1:
         # Just environment
@@ -38,13 +38,13 @@ def parse_target(target: str) -> tuple[str, Optional[str], str]:
     elif len(parts) == 2:
         # Could be env.project or env.secret
         # Heuristic: if second part is uppercase, it's a secret
-        if parts[1].isupper() or '_' in parts[1]:
+        if parts[1].isupper() or "_" in parts[1]:
             return parts[0], None, parts[1]
         else:
             return parts[0], parts[1], None
     elif len(parts) >= 3:
         # env.project.secret
-        return parts[0], parts[1], '.'.join(parts[2:])
+        return parts[0], parts[1], ".".join(parts[2:])
     else:
         raise ValueError(f"Invalid target format: {target}")
 
@@ -52,12 +52,24 @@ def parse_target(target: str) -> tuple[str, Optional[str], str]:
 @app.command()
 def bootstrap(
     env: str = typer.Argument(..., help="Environment name (e.g., staging, prod)"),
-    project: Optional[str] = typer.Option(None, "--project", "-p", help="Project name to scope secrets"),
-    config: Optional[str] = typer.Option(None, "--config", "-c", help="Path to secrets config file"),
-    export: bool = typer.Option(True, "--export/--no-export", help="Export secrets to environment variables"),
-    runtime_sa: Optional[str] = typer.Option(None, "--runtime-sa", help="Runtime service account to grant access"),
-    deployer_sa: Optional[str] = typer.Option(None, "--deployer-sa", help="Deployer service account to grant access"),
-    output: Optional[str] = typer.Option(None, "--output", "-o", help="Output file for .env format"),
+    project: Optional[str] = typer.Option(
+        None, "--project", "-p", help="Project name to scope secrets"
+    ),
+    config: Optional[str] = typer.Option(
+        None, "--config", "-c", help="Path to secrets config file"
+    ),
+    export: bool = typer.Option(
+        True, "--export/--no-export", help="Export secrets to environment variables"
+    ),
+    runtime_sa: Optional[str] = typer.Option(
+        None, "--runtime-sa", help="Runtime service account to grant access"
+    ),
+    deployer_sa: Optional[str] = typer.Option(
+        None, "--deployer-sa", help="Deployer service account to grant access"
+    ),
+    output: Optional[str] = typer.Option(
+        None, "--output", "-o", help="Output file for .env format"
+    ),
     verbose: bool = typer.Option(False, "--verbose", "-v", help="Verbose output"),
 ):
     """
@@ -82,7 +94,7 @@ def bootstrap(
     try:
         # Load config
         if config:
-            os.environ['SECRETS_CONFIG_PATH'] = config
+            os.environ["SECRETS_CONFIG_PATH"] = config
 
         manager = SecretsManager()
 
@@ -113,7 +125,7 @@ def bootstrap(
         # Write to output file if specified
         if output:
             output_path = Path(output)
-            with open(output_path, 'w') as f:
+            with open(output_path, "w") as f:
                 for key, value in secrets.items():
                     f.write(f"{key}={value}\n")
             console.print(f"[green]✓[/green] Secrets written to {output_path}")
@@ -127,8 +139,12 @@ def bootstrap(
 def set(
     target: str = typer.Argument(..., help="Target in format 'env[.project].SECRET_NAME'"),
     value: Optional[str] = typer.Option(None, "--value", "-v", help="Secret value (or use stdin)"),
-    config: Optional[str] = typer.Option(None, "--config", "-c", help="Path to secrets config file"),
-    grant: Optional[List[str]] = typer.Option(None, "--grant", "-g", help="Service accounts to grant access"),
+    config: Optional[str] = typer.Option(
+        None, "--config", "-c", help="Path to secrets config file"
+    ),
+    grant: Optional[List[str]] = typer.Option(
+        None, "--grant", "-g", help="Service accounts to grant access"
+    ),
 ):
     """
     Set a secret value (create or update).
@@ -153,7 +169,7 @@ def set(
     try:
         # Load config
         if config:
-            os.environ['SECRETS_CONFIG_PATH'] = config
+            os.environ["SECRETS_CONFIG_PATH"] = config
 
         manager = SecretsManager()
 
@@ -194,7 +210,9 @@ def set(
 def get(
     target: str = typer.Argument(..., help="Target in format 'env[.project].SECRET_NAME'"),
     version: str = typer.Option("latest", "--version", help="Secret version to retrieve"),
-    config: Optional[str] = typer.Option(None, "--config", "-c", help="Path to secrets config file"),
+    config: Optional[str] = typer.Option(
+        None, "--config", "-c", help="Path to secrets config file"
+    ),
     reveal: bool = typer.Option(False, "--reveal", help="Show the full secret value"),
 ):
     """
@@ -212,7 +230,7 @@ def get(
     try:
         # Load config
         if config:
-            os.environ['SECRETS_CONFIG_PATH'] = config
+            os.environ["SECRETS_CONFIG_PATH"] = config
 
         manager = SecretsManager()
 
@@ -244,7 +262,9 @@ def get(
 @app.command()
 def delete(
     target: str = typer.Argument(..., help="Target in format 'env[.project].SECRET_NAME'"),
-    config: Optional[str] = typer.Option(None, "--config", "-c", help="Path to secrets config file"),
+    config: Optional[str] = typer.Option(
+        None, "--config", "-c", help="Path to secrets config file"
+    ),
     force: bool = typer.Option(False, "--force", "-f", help="Skip confirmation"),
 ):
     """
@@ -262,7 +282,7 @@ def delete(
     try:
         # Load config
         if config:
-            os.environ['SECRETS_CONFIG_PATH'] = config
+            os.environ["SECRETS_CONFIG_PATH"] = config
 
         manager = SecretsManager()
 
@@ -298,8 +318,12 @@ def delete(
 @app.command()
 def list(
     env: str = typer.Argument(..., help="Environment name"),
-    project: Optional[str] = typer.Option(None, "--project", "-p", help="Project name to filter by"),
-    config: Optional[str] = typer.Option(None, "--config", "-c", help="Path to secrets config file"),
+    project: Optional[str] = typer.Option(
+        None, "--project", "-p", help="Project name to filter by"
+    ),
+    config: Optional[str] = typer.Option(
+        None, "--config", "-c", help="Path to secrets config file"
+    ),
     reveal: bool = typer.Option(False, "--reveal", help="Show secret values"),
 ):
     """
@@ -317,7 +341,7 @@ def list(
     try:
         # Load config
         if config:
-            os.environ['SECRETS_CONFIG_PATH'] = config
+            os.environ["SECRETS_CONFIG_PATH"] = config
 
         manager = SecretsManager()
 
@@ -351,6 +375,7 @@ def list(
 def version():
     """Show version information."""
     from . import __version__
+
     console.print(f"Botmaro Secrets Manager v{__version__}")
 
 

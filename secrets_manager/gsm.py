@@ -123,7 +123,9 @@ class GSMClient:
         except exceptions.NotFound:
             return False
 
-    def grant_access(self, secret_id: str, member: str, role: str = "roles/secretmanager.secretAccessor"):
+    def grant_access(
+        self, secret_id: str, member: str, role: str = "roles/secretmanager.secretAccessor"
+    ):
         """
         Grant IAM access to a secret.
 
@@ -148,6 +150,7 @@ class GSMClient:
         # Create new binding if it doesn't exist
         if not binding_exists:
             from google.iam.v1 import policy_pb2
+
             new_binding = policy_pb2.Binding(role=role, members=[member])
             policy.bindings.append(new_binding)
 

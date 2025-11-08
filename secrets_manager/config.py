@@ -33,11 +33,11 @@ class EnvironmentConfig(BaseModel):
     projects: Dict[str, ProjectConfig] = Field(default_factory=dict)
     global_secrets: List[SecretConfig] = Field(default_factory=list)
 
-    @field_validator('prefix', mode='before')
+    @field_validator("prefix", mode="before")
     @classmethod
     def set_prefix(cls, v: Optional[str], info) -> str:
         """Auto-generate prefix if not provided."""
-        if v is None and 'name' in info.data:
+        if v is None and "name" in info.data:
             return f"botmaro-{info.data['name']}"
         return v or ""
 
@@ -55,10 +55,10 @@ class SecretsConfig(BaseModel):
         if not path.exists():
             raise FileNotFoundError(f"Config file not found: {path}")
 
-        with open(path, 'r') as f:
-            if path.suffix in ['.yaml', '.yml']:
+        with open(path, "r") as f:
+            if path.suffix in [".yaml", ".yml"]:
                 data = yaml.safe_load(f)
-            elif path.suffix == '.json':
+            elif path.suffix == ".json":
                 data = json.load(f)
             else:
                 raise ValueError(f"Unsupported file type: {path.suffix}")
@@ -68,7 +68,7 @@ class SecretsConfig(BaseModel):
     @classmethod
     def from_env(cls) -> "SecretsConfig":
         """Load configuration from environment variables."""
-        config_path = os.getenv('SECRETS_CONFIG_PATH', 'secrets.yml')
+        config_path = os.getenv("SECRETS_CONFIG_PATH", "secrets.yml")
         return cls.from_file(config_path)
 
     def get_environment(self, env_name: str) -> Optional[EnvironmentConfig]:
