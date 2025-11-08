@@ -1,4 +1,4 @@
-3"""Tests for secrets naming convention."""
+"""Tests for secrets naming convention."""
 
 import pytest
 from secrets_manager.core import SecretsManager

@@ -220,17 +220,18 @@ class SecretsManager:
         return gsm.delete_secret(secret_name)
 
     def list_secrets(
-        self, env: str, project: Optional[str] = None
-    ) -> List[Tuple[str, Optional[str]]]:
+        self, env: str, project: Optional[str] = None, scope: Optional[str] = None
+    ) -> List[Tuple[str, Optional[str], str]]:
         """
         List all secrets for an environment.
 
         Args:
             env: Environment name
             project: Optional project name to filter by
+            scope: Optional scope filter ('env', 'project', or 'all'/'None' for all)
 
         Returns:
-            List of (secret_name, value) tuples
+            List of (secret_name, value, scope) tuples where scope is 'env' or 'project'
         """
         env_config = self.config.get_environment(env)
         if not env_config:
@@ -252,6 +253,16 @@ class SecretsManager:
             # Parse using double-hyphen separator
             parts = secret_id.split("--")
 
+            # Determine scope: env-level has 2 parts (prefix--secret), project-level has 3+ parts (prefix--project--secret)
+            secret_scope = "project" if len(parts) >= 3 else "env"
+
+            # Apply scope filter if specified
+            if scope and scope != "all":
+                if scope == "env" and secret_scope != "env":
+                    continue  # Skip project-level secrets
+                elif scope == "project" and secret_scope != "project":
+                    continue  # Skip env-level secrets
+
             if project:
                 # Expected format: prefix--project--secret
                 if len(parts) >= 3:
@@ -259,14 +270,21 @@ class SecretsManager:
                 else:
                     name = secret_id  # Fallback
             else:
-                # Expected format: prefix--secret
-                if len(parts) >= 2:
-                    name = "--".join(parts[1:])  # Handle secrets with -- in name
+                # Expected format: prefix--secret or prefix--project--secret
+                if len(parts) == 2:
+                    # Environment-level: prefix--secret
+                    name = parts[1]
+                elif len(parts) >= 3:
+                    # Project-level: prefix--project--secret
+                    # For display, show as project/secret
+                    project_name = parts[1]
+                    secret_name = "--".join(parts[2:])
+                    name = f"{project_name}/{secret_name}"
                 else:
                     name = secret_id  # Fallback
 
             value = gsm.get_secret_version(secret_id)
-            results.append((name, value))
+            results.append((name, value, secret_scope))
 
         return results
 
