@@ -485,6 +485,50 @@ Check that:
 
 Ensure your service account has the required IAM roles listed above.
 
+## Releasing
+
+This project uses tag-based releases. When you're ready to publish a new version:
+
+### 1. Update version and changelog
+
+```bash
+# Update version in pyproject.toml
+vim pyproject.toml  # Change version = "0.1.0" to "0.1.1"
+
+# Update CHANGELOG.md
+vim CHANGELOG.md    # Add release notes under [Unreleased]
+```
+
+### 2. Commit changes
+
+```bash
+git add pyproject.toml CHANGELOG.md
+git commit -m "Bump version to 0.1.1"
+git push origin main
+```
+
+### 3. Create and push tag
+
+```bash
+# Create an annotated tag
+git tag -a v0.1.1 -m "Release v0.1.1: Description of changes"
+
+# Push the tag (this triggers PyPI publish!)
+git push origin v0.1.1
+```
+
+### What happens automatically:
+
+1. **Version verification** - Ensures tag matches pyproject.toml version
+2. **Build package** - Creates wheel and source distribution
+3. **Publish to PyPI** - Uploads to PyPI (requires PYPI_API_TOKEN secret)
+4. **Create GitHub Release** - Creates release page with changelog and assets
+
+### Manual publish (if needed)
+
+You can also manually trigger the publish workflow from GitHub Actions UI:
+- Go to Actions → Publish to PyPI → Run workflow
+
 ## Contributing
 
 Contributions are welcome! Please feel free to submit a Pull Request.
