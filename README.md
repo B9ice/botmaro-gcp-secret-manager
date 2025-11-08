@@ -1,2 +1,455 @@
-# botmaro-gcp-secret-manager
-Google Secret Manager Convenience
+# Botmaro Secrets Manager
+
+A standalone, environment-aware secret management tool built on Google Secret Manager (GSM). Designed for multi-environment deployments with support for both GitHub Actions workflows and local development.
+
+## Features
+
+- 🔐 **Multi-environment support** - Manage secrets across staging, prod, dev, and custom environments
+- 🎯 **Project scoping** - Organize secrets by project within environments
+- 🔄 **Version control** - Leverage GSM's built-in versioning
+- 🚀 **CI/CD ready** - Bootstrap secrets in GitHub Actions or any CI/CD pipeline
+- 🛠️ **CRUD operations** - Full create, read, update, delete support via CLI
+- 📦 **Pip installable** - Install as a standalone package
+- 🎨 **Rich CLI** - Beautiful, user-friendly command-line interface
+- 🔒 **IAM integration** - Automatic service account access management
+
+## Installation
+
+### From source (development)
+
+```bash
+# Clone the repository
+git clone https://github.com/B9ice/botmaro-gcp-secret-manager.git
+cd botmaro-gcp-secret-manager
+
+# Install in development mode
+pip install -e .
+```
+
+### From PyPI (when published)
+
+```bash
+pip install botmaro-secrets-manager
+```
+
+## Quick Start
+
+### 1. Create a configuration file
+
+Create a `secrets.yml` file defining your environments and secrets:
+
+```yaml
+version: "1.0"
+
+environments:
+  staging:
+    name: staging
+    gcp_project: your-gcp-project-staging
+    global_secrets:
+      - name: API_KEY
+        required: true
+      - name: DATABASE_URL
+        required: true
+```
+
+See [secrets.example.yml](secrets.example.yml) for a complete example.
+
+### 2. Bootstrap your environment
+
+```bash
+# Load all secrets for staging environment
+secrets-manager bootstrap staging
+
+# Bootstrap with project scope
+secrets-manager bootstrap staging --project myapp
+
+# Export to a .env file
+secrets-manager bootstrap staging --output .env.staging
+```
+
+### 3. Manage secrets
+
+```bash
+# Set a secret
+secrets-manager set staging.API_KEY --value "sk-123456"
+
+# Set a project-scoped secret
+secrets-manager set staging.myapp.DATABASE_URL --value "postgres://..."
+
+# Get a secret
+secrets-manager get staging.API_KEY --reveal
+
+# List all secrets
+secrets-manager list staging
+
+# Delete a secret
+secrets-manager delete staging.OLD_KEY --force
+```
+
+## Usage
+
+### Command-Line Interface
+
+#### Bootstrap Command
+
+Load all secrets for an environment:
+
+```bash
+secrets-manager bootstrap <environment> [OPTIONS]
+
+Options:
+  --project, -p TEXT      Project name to scope secrets
+  --config, -c TEXT       Path to secrets config file
+  --export/--no-export    Export secrets to environment variables [default: True]
+  --runtime-sa TEXT       Runtime service account to grant access
+  --deployer-sa TEXT      Deployer service account to grant access
+  --output, -o TEXT       Output file for .env format
+  --verbose, -v           Verbose output
+```
+
+**Examples:**
+
+```bash
+# Bootstrap staging
+secrets-manager bootstrap staging
+
+# Bootstrap with service account access grants
+secrets-manager bootstrap staging \
+  --runtime-sa bot@project.iam.gserviceaccount.com \
+  --deployer-sa deploy@project.iam.gserviceaccount.com
+
+# Save to .env file
+secrets-manager bootstrap prod --output .env.production
+```
+
+#### Set Command
+
+Create or update a secret:
+
+```bash
+secrets-manager set <target> [OPTIONS]
+
+Target format:
+  - env.SECRET_NAME              (environment-scoped)
+  - env.project.SECRET_NAME      (project-scoped)
+
+Options:
+  --value, -v TEXT     Secret value (or read from stdin)
+  --config, -c TEXT    Path to secrets config file
+  --grant, -g TEXT     Service account to grant access (can be repeated)
+```
+
+**Examples:**
+
+```bash
+# Set an environment-scoped secret
+secrets-manager set staging.API_KEY --value "sk-123456"
+
+# Set a project-scoped secret
+secrets-manager set staging.orchestrator.DATABASE_URL --value "postgres://..."
+
+# Read from stdin
+echo "secret-value" | secrets-manager set staging.MY_SECRET
+
+# Grant access to service accounts
+secrets-manager set staging.API_KEY --value "sk-123" \
+  --grant bot@project.iam.gserviceaccount.com \
+  --grant deploy@project.iam.gserviceaccount.com
+```
+
+#### Get Command
+
+Retrieve a secret value:
+
+```bash
+secrets-manager get <target> [OPTIONS]
+
+Options:
+  --version TEXT       Secret version to retrieve [default: latest]
+  --config, -c TEXT    Path to secrets config file
+  --reveal             Show the full secret value
+```
+
+**Examples:**
+
+```bash
+# Get latest version (masked by default)
+secrets-manager get staging.API_KEY
+
+# Reveal full value
+secrets-manager get staging.API_KEY --reveal
+
+# Get specific version
+secrets-manager get staging.API_KEY --version 2 --reveal
+```
+
+#### List Command
+
+List all secrets in an environment:
+
+```bash
+secrets-manager list <environment> [OPTIONS]
+
+Options:
+  --project, -p TEXT   Project name to filter by
+  --config, -c TEXT    Path to secrets config file
+  --reveal             Show secret values
+```
+
+**Examples:**
+
+```bash
+# List all staging secrets
+secrets-manager list staging
+
+# List project-specific secrets
+secrets-manager list staging --project orchestrator
+
+# Show values (masked by default)
+secrets-manager list staging --reveal
+```
+
+#### Delete Command
+
+Delete a secret:
+
+```bash
+secrets-manager delete <target> [OPTIONS]
+
+Options:
+  --config, -c TEXT    Path to secrets config file
+  --force, -f          Skip confirmation
+```
+
+**Examples:**
+
+```bash
+# Delete with confirmation prompt
+secrets-manager delete staging.OLD_API_KEY
+
+# Force delete
+secrets-manager delete staging.OLD_API_KEY --force
+```
+
+## GitHub Actions Integration
+
+### Example Workflow
+
+```yaml
+name: Deploy
+
+on:
+  push:
+    branches: [main]
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v3
+
+      - name: Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.11'
+
+      - name: Install secrets manager
+        run: pip install -e .
+
+      - name: Authenticate to Google Cloud
+        uses: google-github-actions/auth@v1
+        with:
+          credentials_json: ${{ secrets.GCP_SA_KEY }}
+
+      - name: Bootstrap secrets
+        run: |
+          secrets-manager bootstrap staging \
+            --runtime-sa botmaro-runner@project.iam.gserviceaccount.com \
+            --config secrets.yml
+
+      - name: Deploy application
+        run: |
+          # Your deployment commands here
+          # All secrets are now available as environment variables
+          echo "Deploying with SUPABASE_URL=$SUPABASE_URL"
+```
+
+### Setting up initial secrets
+
+Confir running in GitHub Actions, you need to populate secrets using this tool's CLI.
+
+**Note:** This tool is your interface to Google Secret Manager. You only need `gcloud` for authentication, not for managing secrets.
+
+```bash
+# 1. Authenticate to GCP (required for API access)
+gcloud auth application-default login
+
+# 2. Use secrets-manager CLI to create and manage secrets
+secrets-manager set staging.SUPABASE_URL --value "https://xxx.supabase.co"
+secrets-manager set staging.SUPABASE_ANON_KEY --value "eyJxxx..."
+secrets-manager set staging.SUPABASE_SERVICE_ROLE_KEY --value "eyJxxx..."
+
+# 3. Verify secrets were created
+secrets-manager list staging --reveal
+```
+
+The `secrets-manager` CLI automatically creates secrets in Google Secret Manager with proper naming conventions and IAM permissions.
+
+## Configuration Reference
+
+### Environment Configuration
+
+```yaml
+environments:
+  <env-name>:
+    name: string              # Environment name
+    gcp_project: string       # GCP project ID
+    prefix: string            # Optional: secret name prefix (default: botmaro-{env})
+
+    global_secrets:           # Environment-level secrets
+      - name: string          # Secret name
+        description: string   # Optional description
+        required: boolean     # Whether secret is required (default: true)
+        default: string       # Optional default value
+
+    projects:                 # Project-specific secrets
+      <project-name>:
+        project_id: string
+        secrets:
+          - name: string
+            description: string
+            required: boolean
+            default: string
+```
+
+## Secret Naming Convention
+
+Secrets are stored in GSM using a **double-hyphen (`--`) convention** for hierarchical separation, while single hyphens (`-`) or underscores (`_`) are used within component names:
+
+- **Environment-scoped**: `{prefix}--{SECRET_NAME}`
+  - Example: `botmaro-staging--API_KEY`
+  - Example: `my-longer-prefix--SUPABASE_URL`
+
+- **Project-scoped**: `{prefix}--{project}--{SECRET_NAME}`
+  - Example: `botmaro-staging--orchestrator--DATABASE_URL`
+  - Example: `my-company-prod--my-service--API_KEY`
+
+Where `{prefix}` defaults to `botmaro-{environment}` but can be customized.
+
+**Why double-hyphen?**
+- Provides clear, unambiguous hierarchical separation
+- Easy to parse: `secret_id.split('--')`
+- GSM-compliant (only allows letters, numbers, `-`, and `_`)
+- Visually distinct from naming hyphens
+
+## Local Development
+
+### Setup
+
+```bash
+# Install dependencies
+pip install -e ".[dev]"
+
+# Set up secrets config
+cp secrets.example.yml secrets.yml
+# Edit secrets.yml with your configuration
+
+# Authenticate to GCP
+gcloud auth application-default login
+```
+
+### Running locally
+
+```bash
+# Bootstrap local environment
+secrets-manager bootstrap dev
+
+# Or use a custom config
+secrets-manager bootstrap dev --config ./my-secrets.yml
+```
+
+## Python API
+
+You can also use the library programmatically:
+
+```python
+from secrets_manager import SecretsManager, SecretsConfig
+
+# Load from config file
+config = SecretsConfig.from_file("secrets.yml")
+manager = SecretsManager(config)
+
+# Bootstrap environment
+secrets = manager.bootstrap(env="staging", export_to_env=True)
+
+# Set a secret
+manager.set_secret(
+    env="staging",
+    secret="API_KEY",
+    value="sk-123456",
+    grant_to=["bot@project.iam.gserviceaccount.com"]
+)
+
+# Get a secret
+value = manager.get_secret(env="staging", secret="API_KEY")
+
+# List secrets
+secrets = manager.list_secrets(env="staging", project="myapp")
+```
+
+## IAM Permissions
+
+The service account running the secrets manager needs:
+
+- `secretmanager.admin` - To create/update/delete secrets
+- `iam.serviceAccountUser` - To grant access to other service accounts
+
+Grant these roles:
+
+```bash
+gcloud projects add-iam-policy-binding PROJECT_ID \
+  --member="serviceAccount:YOUR_SA@PROJECT.iam.gserviceaccount.com" \
+  --role="roles/secretmanager.admin"
+```
+
+Runtime service accounts need:
+
+- `secretmanager.secretAccessor` - To read secrets (granted automatically by the tool)
+
+## Troubleshooting
+
+### Authentication errors
+
+Make sure you're authenticated to GCP:
+
+```bash
+gcloud auth application-default login
+```
+
+For CI/CD, use service account key or Workload Identity.
+
+### Secret not found
+
+Check that:
+1. The secret exists in GSM: `gcloud secrets list --project PROJECT_ID`
+2. Your config file matches the environment name
+3. The GCP project ID is correct
+
+### Permission denied
+
+Ensure your service account has the required IAM roles listed above.
+
+## Contributing
+
+Contributions are welcome! Please feel free to submit a Pull Request.
+
+## License
+
+MIT License - see LICENSE file for details.
+
+## Support
+
+For issues and questions:
+- GitHub Issues: https://github.com/B9ice/botmaro-gcp-secret-manager/issues
+- Documentation: https://github.com/B9ice/botmaro-gcp-secret-manager

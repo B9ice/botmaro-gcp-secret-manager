@@ -1,0 +1,6 @@
+include README.secrets-manager.md
+include SETUP.secrets-manager.md
+include LICENSE
+include secrets.example.yml
+include pyproject.toml
+recursive-include secrets_manager *.py
