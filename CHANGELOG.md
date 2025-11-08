@@ -8,6 +8,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- **Secrets validation and checking (`check` command)**
+  - New `secrets-manager check` command for comprehensive validation
+  - Detects missing secrets in GSM
+  - Identifies placeholder values (PLACEHOLDER, TODO, changeme, etc.)
+  - Identifies placeholder service accounts
+  - Verifies service account access to secrets
+  - Parses GitHub Actions workflow files to extract secret references
+  - Validates that workflow secrets are defined in config
+  - Supports both individual workflow files and directories
+  - Returns error exit code for CI/CD integration
+  - Color-coded output showing errors (red), warnings (yellow), and success (green)
+  - Verbose mode for detailed findings
+  - Use cases: pre-deployment validation, audit, troubleshooting
 - **Automatic service account access grants during bootstrap**
   - Configure service accounts in `secrets.yml` at environment and project levels
   - Bootstrap command automatically grants `secretAccessor` role to configured service accounts
@@ -27,7 +40,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - New `--scope` option with values: `env`, `project`, `all`
   - Filter secrets by environment-level or project-level
   - Returns 3-tuple with scope information
-- Comprehensive documentation for automatic access grants in README
+- Comprehensive documentation for automatic access grants and check command in README
 - Auto-merge workflow: automatically merges `develop` into `main` when all tests pass
 - Type checking improvements and mypy compliance
 
