@@ -325,6 +325,11 @@ def list(
         None, "--config", "-c", help="Path to secrets config file"
     ),
     reveal: bool = typer.Option(False, "--reveal", help="Show secret values"),
+    scope: Optional[str] = typer.Option(
+        None,
+        "--scope",
+        help="Filter by scope: 'env' (environment-level only), 'project' (project-level only), or 'all' (default)",
+    ),
 ):
     """
     List all secrets for an environment.
@@ -337,6 +342,14 @@ def list(
         \b
         # List secrets for a specific project
         secrets-manager list staging --project myapp
+
+        \b
+        # List only environment-level secrets
+        secrets-manager list staging --scope env
+
+        \b
+        # List only project-scoped secrets
+        secrets-manager list staging --scope project
     """
     try:
         # Load config
@@ -345,23 +358,38 @@ def list(
 
         manager = SecretsManager()
 
+        # Validate scope option
+        if scope and scope not in ["env", "project", "all"]:
+            console.print(
+                "[red]✗ Error:[/red] --scope must be one of: env, project, all",
+                style="bold red",
+            )
+            raise typer.Exit(code=1)
+
         # List secrets
         with console.status(f"[bold green]Loading secrets..."):
-            secrets = manager.list_secrets(env=env, project=project)
+            secrets = manager.list_secrets(env=env, project=project, scope=scope)
 
         # Display results
-        table = Table(title=f"Secrets - {env}" + (f".{project}" if project else ""))
+        scope_label = ""
+        if scope == "env":
+            scope_label = " (environment-level only)"
+        elif scope == "project":
+            scope_label = " (project-level only)"
+
+        table = Table(title=f"Secrets - {env}" + (f".{project}" if project else "") + scope_label)
         table.add_column("Secret Name", style="cyan")
+        table.add_column("Scope", style="yellow")
         table.add_column("Value", style="green")
 
-        for name, value in secrets:
+        for name, value, secret_scope in secrets:
             if value and reveal:
-                table.add_row(name, value)
+                table.add_row(name, secret_scope, value)
             elif value:
                 masked = f"{value[:4]}...{value[-4:]}" if len(value) > 8 else "***"
-                table.add_row(name, masked)
+                table.add_row(name, secret_scope, masked)
             else:
-                table.add_row(name, "[red]<not found>[/red]")
+                table.add_row(name, secret_scope, "[red]<not found>[/red]")
 
         console.print(table)
         console.print(f"\nTotal: {len(secrets)} secrets")
@@ -439,7 +467,7 @@ def grant_access(
             secrets = manager.list_secrets(env=env, project=project)
 
         console.print(f"\nAffected secrets ({len(secrets)}):")
-        for name, _ in secrets[:10]:  # Show first 10
+        for name, _, _ in secrets[:10]:  # Show first 10 (unpack 3-tuple)
             console.print(f"  - {name}")
         if len(secrets) > 10:
             console.print(f"  ... and {len(secrets) - 10} more")

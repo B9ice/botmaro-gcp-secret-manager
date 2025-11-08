@@ -63,3 +63,4 @@ Thumbs.db
 # Distribution
 *.tar.gz
 *.whl
+add_secrets.py
