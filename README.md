@@ -346,6 +346,12 @@ environments:
     gcp_project: string       # GCP project ID
     prefix: string            # Optional: secret name prefix (default: botmaro-{env})
 
+    # Optional: Service accounts that need access to all environment-level secrets
+    # These will be automatically granted secretAccessor role during bootstrap
+    service_accounts:
+      - service-account-1@project.iam.gserviceaccount.com
+      - service-account-2@project.iam.gserviceaccount.com
+
     global_secrets:           # Environment-level secrets
       - name: string          # Secret name
         description: string   # Optional description
@@ -355,12 +361,71 @@ environments:
     projects:                 # Project-specific secrets
       <project-name>:
         project_id: string
+
+        # Optional: Project-specific service accounts
+        # If not specified, environment-level service accounts will be used
+        service_accounts:
+          - project-sa@project.iam.gserviceaccount.com
+
         secrets:
           - name: string
             description: string
             required: boolean
             default: string
 ```
+
+### Automatic Service Account Access Grants
+
+The tool automatically grants `secretAccessor` role to service accounts configured in `secrets.yml` during bootstrap. This ensures that your runtime and deployment service accounts always have access to the secrets they need.
+
+**Configuration Example:**
+
+```yaml
+environments:
+  staging:
+    name: staging
+    gcp_project: my-project-staging
+
+    # These service accounts will automatically get access to all staging secrets
+    service_accounts:
+      - runtime-bot@my-project-staging.iam.gserviceaccount.com
+      - deployer@my-project-staging.iam.gserviceaccount.com
+
+    global_secrets:
+      - name: API_KEY
+        required: true
+
+    projects:
+      myapp:
+        project_id: myapp
+
+        # Additional service accounts for this project's secrets
+        service_accounts:
+          - myapp-runtime@my-project-staging.iam.gserviceaccount.com
+
+        secrets:
+          - name: DATABASE_URL
+            required: true
+```
+
+**How it works:**
+
+1. During `secrets-manager bootstrap`, the tool checks if configured service accounts have access to each secret
+2. If access is missing, it automatically grants the `secretAccessor` role
+3. If access already exists, it skips (idempotent operation)
+4. For project-scoped secrets, both environment-level and project-level service accounts get access
+
+**Manual override:**
+
+You can also specify additional service accounts at runtime:
+
+```bash
+secrets-manager bootstrap staging \
+  --runtime-sa additional-bot@project.iam.gserviceaccount.com \
+  --deployer-sa additional-deployer@project.iam.gserviceaccount.com
+```
+
+These will be granted access **in addition to** the service accounts configured in `secrets.yml`.
 
 ## Secret Naming Convention
 
