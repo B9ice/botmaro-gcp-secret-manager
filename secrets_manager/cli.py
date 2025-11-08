@@ -384,10 +384,18 @@ def list(
 
         for name, value, secret_scope in secrets:
             if value and reveal:
-                table.add_row(name, secret_scope, value)
+                # Check if value is a placeholder
+                if value.startswith("PLACEHOLDER") or "placeholder" in value.lower():
+                    table.add_row(name, secret_scope, f"[red]{value}[/red]")
+                else:
+                    table.add_row(name, secret_scope, value)
             elif value:
-                masked = f"{value[:4]}...{value[-4:]}" if len(value) > 8 else "***"
-                table.add_row(name, secret_scope, masked)
+                # Check if value is a placeholder
+                if value.startswith("PLACEHOLDER") or "placeholder" in value.lower():
+                    table.add_row(name, secret_scope, "[red]PLACEHOLDER[/red]")
+                else:
+                    masked = f"{value[:4]}...{value[-4:]}" if len(value) > 8 else "***"
+                    table.add_row(name, secret_scope, masked)
             else:
                 table.add_row(name, secret_scope, "[red]<not found>[/red]")
 
