@@ -20,7 +20,7 @@ app = typer.Typer(
 console = Console()
 
 
-def parse_target(target: str) -> tuple[str, Optional[str], str]:
+def parse_target(target: str) -> tuple[str, Optional[str], Optional[str]]:
     """
     Parse target string into (env, project, secret).
 

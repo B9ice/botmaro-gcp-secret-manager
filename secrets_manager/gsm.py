@@ -1,6 +1,6 @@
 """Google Secret Manager integration."""
 
-from typing import Optional, List, Dict
+from typing import Optional, List, Dict, Any
 from google.cloud import secretmanager
 from google.api_core import exceptions
 
@@ -27,7 +27,7 @@ class GSMClient:
         """
         try:
             parent = self.project_path
-            secret = {"replication": {"automatic": {}}}
+            secret: Dict[str, Any] = {"replication": {"automatic": {}}}
 
             if replication_policy != "automatic":
                 # Allow custom replication policies in the future
