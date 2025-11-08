@@ -52,6 +52,9 @@ secrets.yml
 *.key
 *.json
 key.json
+*.secrets
+import_secrets.py
+add_secrets.py
 
 # OS
 .DS_Store
