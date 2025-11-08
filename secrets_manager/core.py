@@ -269,3 +269,45 @@ class SecretsManager:
             results.append((name, value))
 
         return results
+
+    def grant_access_bulk(
+        self,
+        env: str,
+        service_accounts: List[str],
+        project: Optional[str] = None,
+    ) -> Dict[str, int]:
+        """
+        Grant access to all secrets in an environment or project.
+
+        Args:
+            env: Environment name
+            service_accounts: List of service account emails to grant access
+            project: Optional project name to scope to
+
+        Returns:
+            Dict with count of secrets updated
+        """
+        env_config = self.config.get_environment(env)
+        if not env_config:
+            raise ValueError(f"Environment '{env}' not found")
+
+        gsm = self._get_gsm_client(env_config.gcp_project)
+        prefix = env_config.prefix or f"botmaro-{env}"
+
+        # Build filter - use double-hyphen convention
+        if project:
+            filter_str = f"name:{prefix}--{project}--"
+        else:
+            filter_str = f"name:{prefix}--"
+
+        secret_ids = gsm.list_secrets(filter_str)
+
+        count = 0
+        for secret_id in secret_ids:
+            for sa in service_accounts:
+                if not sa.startswith("serviceAccount:"):
+                    sa = f"serviceAccount:{sa}"
+                gsm.grant_access(secret_id, sa)
+            count += 1
+
+        return {"secrets_updated": count, "service_accounts": len(service_accounts)}

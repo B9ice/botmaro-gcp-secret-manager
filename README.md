@@ -231,6 +231,45 @@ secrets-manager delete staging.OLD_API_KEY
 secrets-manager delete staging.OLD_API_KEY --force
 ```
 
+#### Grant Access Command
+
+Grant access to all secrets in an environment or project:
+
+```bash
+secrets-manager grant-access <target> [OPTIONS]
+
+Target format:
+  - env                  (all environment-level secrets)
+  - env.project          (all project-scoped secrets)
+
+Options:
+  --sa TEXT            Service account email to grant access (can be repeated)
+  --config, -c TEXT    Path to secrets config file
+  --force, -f          Skip confirmation prompt
+```
+
+**Examples:**
+
+```bash
+# Grant access to all staging secrets
+secrets-manager grant-access staging \
+  --sa bot@project.iam.gserviceaccount.com
+
+# Grant to multiple service accounts
+secrets-manager grant-access staging \
+  --sa bot@project.iam.gserviceaccount.com \
+  --sa deployer@project.iam.gserviceaccount.com
+
+# Grant access to all project-specific secrets
+secrets-manager grant-access staging.myapp \
+  --sa myapp-runtime@project.iam.gserviceaccount.com
+
+# Skip confirmation
+secrets-manager grant-access staging --sa bot@project.iam.gserviceaccount.com --force
+```
+
+**Note:** This command grants the `secretmanager.secretAccessor` role, allowing the service account to read secret values.
+
 ## GitHub Actions Integration
 
 ### Example Workflow
@@ -277,7 +316,7 @@ jobs:
 
 ### Setting up initial secrets
 
-Confir running in GitHub Actions, you need to populate secrets using this tool's CLI.
+Before running in GitHub Actions, you need to populate secrets using this tool's CLI.
 
 **Note:** This tool is your interface to Google Secret Manager. You only need `gcloud` for authentication, not for managing secrets.
 
@@ -396,6 +435,12 @@ value = manager.get_secret(env="staging", secret="API_KEY")
 
 # List secrets
 secrets = manager.list_secrets(env="staging", project="myapp")
+
+# Grant access to all secrets in an environment
+result = manager.grant_access_bulk(
+    env="staging",
+    service_accounts=["bot@project.iam.gserviceaccount.com", "deployer@project.iam.gserviceaccount.com"]
+)
 ```
 
 ## IAM Permissions

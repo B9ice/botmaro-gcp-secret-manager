@@ -372,6 +372,105 @@ def list(
 
 
 @app.command()
+def grant_access(
+    target: str = typer.Argument(
+        ..., help="Target in format 'env' or 'env.project' to grant access to all secrets"
+    ),
+    service_account: List[str] = typer.Option(
+        ..., "--sa", help="Service account email(s) to grant access (can be repeated)"
+    ),
+    config: Optional[str] = typer.Option(
+        None, "--config", "-c", help="Path to secrets config file"
+    ),
+    force: bool = typer.Option(False, "--force", "-f", help="Skip confirmation prompt"),
+):
+    """
+    Grant access to all secrets in an environment or project.
+
+    This grants secretAccessor role to the specified service account(s) for
+    all secrets in the given scope.
+
+    Examples:
+        \b
+        # Grant access to all staging secrets
+        secrets-manager grant-access staging --sa bot@project.iam.gserviceaccount.com
+
+        \b
+        # Grant access to multiple service accounts
+        secrets-manager grant-access staging \\
+          --sa bot@project.iam.gserviceaccount.com \\
+          --sa deployer@project.iam.gserviceaccount.com
+
+        \b
+        # Grant access to project-specific secrets
+        secrets-manager grant-access staging.myapp --sa runtime@project.iam.gserviceaccount.com
+    """
+    try:
+        # Load config
+        if config:
+            os.environ["SECRETS_CONFIG_PATH"] = config
+
+        manager = SecretsManager()
+
+        # Parse target
+        env, project, secret = parse_target(target)
+
+        if secret:
+            console.print(
+                "[red]✗ Error:[/red] grant-access works on environment or project level, not individual secrets",
+                style="bold red",
+            )
+            console.print(
+                "Use 'secrets-manager set <target> --value ... --grant ...' for individual secrets"
+            )
+            raise typer.Exit(code=1)
+
+        # Show what will be affected
+        target_str = f"{env}.{project}" if project else env
+        scope = f"project '{project}' in environment '{env}'" if project else f"environment '{env}'"
+
+        console.print(f"[bold]Will grant access to all secrets in {scope}[/bold]")
+        console.print(f"Service accounts:")
+        for sa in service_account:
+            console.print(f"  - {sa}")
+
+        # List affected secrets
+        with console.status(f"[bold green]Finding secrets..."):
+            secrets = manager.list_secrets(env=env, project=project)
+
+        console.print(f"\nAffected secrets ({len(secrets)}):")
+        for name, _ in secrets[:10]:  # Show first 10
+            console.print(f"  - {name}")
+        if len(secrets) > 10:
+            console.print(f"  ... and {len(secrets) - 10} more")
+
+        # Confirm
+        if not force:
+            console.print()
+            confirm = typer.confirm(
+                f"Grant access to {len(service_account)} service account(s) for {len(secrets)} secret(s)?"
+            )
+            if not confirm:
+                console.print("Cancelled")
+                raise typer.Exit(code=0)
+
+        # Grant access
+        with console.status(f"[bold green]Granting access..."):
+            result = manager.grant_access_bulk(
+                env=env, service_accounts=service_account, project=project
+            )
+
+        console.print(
+            f"[green]✓[/green] Granted access to {result['secrets_updated']} secrets "
+            f"for {result['service_accounts']} service account(s)"
+        )
+
+    except Exception as e:
+        console.print(f"[red]✗ Error:[/red] {str(e)}", style="bold red")
+        raise typer.Exit(code=1)
+
+
+@app.command()
 def version():
     """Show version information."""
     from . import __version__
