@@ -5,6 +5,7 @@ from typing import Dict, List, Optional, Tuple
 from pathlib import Path
 from .config import SecretsConfig, EnvironmentConfig, ProjectConfig
 from .gsm import GSMClient
+from .validator import SecretsValidator, ValidationResult
 
 
 class SecretsManager:
@@ -344,3 +345,41 @@ class SecretsManager:
             count += 1
 
         return {"secrets_updated": count, "service_accounts": len(service_accounts)}
+
+    def check_secrets(
+        self,
+        env: str,
+        project: Optional[str] = None,
+        workflow_path: Optional[str] = None,
+    ) -> ValidationResult:
+        """
+        Validate secrets configuration and state.
+
+        Checks for:
+        - Missing secrets in GSM
+        - Placeholder secret values
+        - Placeholder service accounts
+        - Missing service account access
+        - Undefined workflow secrets (if workflow_path provided)
+
+        Args:
+            env: Environment name
+            project: Optional project name to scope to
+            workflow_path: Optional path to workflow file or .github/workflows directory
+
+        Returns:
+            ValidationResult with all findings
+
+        Raises:
+            ValueError: If environment not found
+        """
+        env_config = self.config.get_environment(env)
+        if not env_config:
+            raise ValueError(f"Environment '{env}' not found")
+
+        gsm = self._get_gsm_client(env_config.gcp_project)
+        validator = SecretsValidator(self.config, gsm)
+
+        workflow_path_obj = Path(workflow_path) if workflow_path else None
+
+        return validator.validate_secrets(env=env, project=project, workflow_path=workflow_path_obj)

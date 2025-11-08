@@ -507,6 +507,129 @@ def grant_access(
 
 
 @app.command()
+def check(
+    env: str = typer.Argument(..., help="Environment name (e.g., staging, prod)"),
+    project: Optional[str] = typer.Option(
+        None, "--project", "-p", help="Project name to scope secrets"
+    ),
+    config: Optional[str] = typer.Option(
+        None, "--config", "-c", help="Path to secrets config file"
+    ),
+    workflows: Optional[str] = typer.Option(
+        None, "--workflows", "-w", help="Path to workflow file or .github/workflows directory"
+    ),
+    verbose: bool = typer.Option(False, "--verbose", "-v", help="Show detailed findings"),
+):
+    """
+    Check and validate secrets configuration and state.
+
+    This command validates:
+    - All required secrets exist in GSM
+    - No placeholder values in secrets
+    - No placeholder service accounts
+    - Service accounts have proper access
+    - Workflow secrets are defined (if --workflows provided)
+
+    Examples:
+        \\b
+        # Check all staging secrets
+        secrets-manager check staging
+
+        \\b
+        # Check with project scope
+        secrets-manager check staging --project myapp
+
+        \\b
+        # Check against workflow files
+        secrets-manager check staging --workflows .github/workflows
+
+        \\b
+        # Check a specific workflow file
+        secrets-manager check prod --workflows .github/workflows/deploy.yml
+    """
+    try:
+        # Load config
+        if config:
+            os.environ["SECRETS_CONFIG_PATH"] = config
+
+        manager = SecretsManager()
+
+        with console.status(f"[bold green]Checking secrets for {env}..."):
+            result = manager.check_secrets(
+                env=env,
+                project=project,
+                workflow_path=workflows,
+            )
+
+        # Display summary
+        console.print(f"\n[bold]Validation Summary:[/bold]")
+        console.print(result.get_summary())
+
+        # Display detailed findings if verbose or if there are errors
+        if verbose or result.has_errors:
+            console.print()
+
+            if result.missing_secrets:
+                console.print(
+                    f"\n[bold red]❌ Missing Secrets ({len(result.missing_secrets)}):[/bold red]"
+                )
+                for secret in result.missing_secrets:
+                    console.print(f"  • {secret}")
+
+            if result.placeholder_secrets:
+                console.print(
+                    f"\n[bold yellow]⚠️  Placeholder Secrets ({len(result.placeholder_secrets)}):[/bold yellow]"
+                )
+                for secret, value in result.placeholder_secrets:
+                    masked = f"{value[:20]}..." if len(value) > 20 else value
+                    console.print(f"  • {secret}: {masked}")
+
+            if result.placeholder_service_accounts:
+                console.print(
+                    f"\n[bold yellow]⚠️  Placeholder Service Accounts ({len(result.placeholder_service_accounts)}):[/bold yellow]"
+                )
+                for sa in result.placeholder_service_accounts:
+                    console.print(f"  • {sa}")
+
+            if result.missing_sa_access:
+                console.print(
+                    f"\n[bold red]❌ Missing Service Account Access ({len(result.missing_sa_access)}):[/bold red]"
+                )
+                for secret, sa in result.missing_sa_access:
+                    console.print(f"  • {secret} → {sa}")
+
+            if result.undefined_workflow_secrets:
+                console.print(
+                    f"\n[bold red]❌ Undefined Workflow Secrets ({len(result.undefined_workflow_secrets)}):[/bold red]"
+                )
+                console.print(
+                    "  These secrets are referenced in workflows but not defined in secrets.yml:"
+                )
+                for secret in result.undefined_workflow_secrets:
+                    console.print(f"  • {secret}")
+
+            if result.workflow_secrets and verbose:
+                console.print(
+                    f"\n[bold]📋 Workflow Secrets Found ({len(result.workflow_secrets)}):[/bold]"
+                )
+                for secret in sorted(result.workflow_secrets):
+                    defined = "✓" if secret not in result.undefined_workflow_secrets else "✗"
+                    console.print(f"  {defined} {secret}")
+
+        # Exit with error code if there are issues
+        if result.has_errors:
+            console.print(f"\n[bold red]❌ Validation failed with errors[/bold red]")
+            raise typer.Exit(code=1)
+        else:
+            console.print(f"\n[bold green]✅ All checks passed![/bold green]")
+            raise typer.Exit(code=0)
+
+    except Exception as e:
+        console.print(f"[red]✗ Error:[/red] {str(e)}", style="bold red")
+        raise typer.Exit(code=1)
+
+
+@app.command()
 def version():
     """Show version information."""
     from . import __version__
