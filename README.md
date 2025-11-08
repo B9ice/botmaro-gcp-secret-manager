@@ -270,6 +270,78 @@ secrets-manager grant-access staging --sa bot@project.iam.gserviceaccount.com --
 
 **Note:** This command grants the `secretmanager.secretAccessor` role, allowing the service account to read secret values.
 
+#### Check Command
+
+Validate secrets configuration and state:
+
+```bash
+secrets-manager check <environment> [OPTIONS]
+
+Options:
+  --project, -p TEXT      Project name to scope secrets
+  --config, -c TEXT       Path to secrets config file
+  --workflows, -w TEXT    Path to workflow file or .github/workflows directory
+  --verbose, -v           Show detailed findings
+```
+
+This command performs comprehensive validation:
+- ✅ All required secrets exist in GSM
+- ✅ No placeholder values in secrets (e.g., "PLACEHOLDER_", "TODO", "changeme")
+- ✅ No placeholder service accounts
+- ✅ Service accounts have proper access to secrets
+- ✅ Workflow secrets are defined in config (when `--workflows` provided)
+
+**Examples:**
+
+```bash
+# Check all staging secrets
+secrets-manager check staging
+
+# Check with project scope
+secrets-manager check staging --project myapp
+
+# Validate against workflow files
+secrets-manager check staging --workflows .github/workflows
+
+# Check specific workflow file
+secrets-manager check prod --workflows .github/workflows/deploy.yml --verbose
+
+# Use in CI/CD to prevent deployment with placeholders
+secrets-manager check prod && echo "Secrets validated, deploying..."
+```
+
+**Exit codes:**
+- `0` - All checks passed
+- `1` - Validation failed (missing secrets, placeholders, or access issues)
+
+**Example output:**
+
+```
+Validation Summary:
+⚠️  2 placeholder secrets
+❌ 1 missing secrets
+❌ 1 service account access issues
+
+⚠️  Placeholder Secrets (2):
+  • OPENAI_API_KEY: PLACEHOLDER_OPENAI_...
+  • DATABASE_URL: TODO-replace-me
+
+❌ Missing Secrets (1):
+  • STRIPE_SECRET_KEY
+
+❌ Missing Service Account Access (1):
+  • API_KEY → runtime-bot@project.iam.gserviceaccount.com
+
+❌ Validation failed with errors
+```
+
+**Use cases:**
+- Pre-deployment validation in CI/CD pipelines
+- Verify secrets before running `bootstrap`
+- Audit service account access
+- Ensure workflow secrets are properly configured
+- Catch configuration issues early
+
 ## GitHub Actions Integration
 
 ### Example Workflow
