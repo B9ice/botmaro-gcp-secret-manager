@@ -22,6 +22,7 @@ class ProjectConfig(BaseModel):
 
     project_id: str
     secrets: List[SecretConfig] = Field(default_factory=list)
+    service_accounts: List[str] = Field(default_factory=list)
 
 
 class EnvironmentConfig(BaseModel):
@@ -32,6 +33,7 @@ class EnvironmentConfig(BaseModel):
     prefix: Optional[str] = None
     projects: Dict[str, ProjectConfig] = Field(default_factory=dict)
     global_secrets: List[SecretConfig] = Field(default_factory=list)
+    service_accounts: List[str] = Field(default_factory=list)
 
     @field_validator("prefix", mode="before")
     @classmethod

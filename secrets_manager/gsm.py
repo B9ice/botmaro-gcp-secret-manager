@@ -156,6 +156,52 @@ class GSMClient:
 
         self.client.set_iam_policy(request={"resource": name, "policy": policy})
 
+    def has_access(
+        self, secret_id: str, member: str, role: str = "roles/secretmanager.secretAccessor"
+    ) -> bool:
+        """
+        Check if a member has access to a secret.
+
+        Args:
+            secret_id: The ID of the secret
+            member: The member to check (e.g., 'serviceAccount:sa@project.iam.gserviceaccount.com')
+            role: The IAM role to check
+
+        Returns:
+            True if the member has the role, False otherwise
+        """
+        try:
+            name = f"{self.project_path}/secrets/{secret_id}"
+            policy = self.client.get_iam_policy(request={"resource": name})
+
+            for binding in policy.bindings:
+                if binding.role == role and member in binding.members:
+                    return True
+
+            return False
+        except exceptions.NotFound:
+            return False
+
+    def ensure_access(
+        self, secret_id: str, member: str, role: str = "roles/secretmanager.secretAccessor"
+    ) -> bool:
+        """
+        Ensure a member has access to a secret (grant if not already granted).
+
+        Args:
+            secret_id: The ID of the secret
+            member: The member to grant access to (e.g., 'serviceAccount:sa@project.iam.gserviceaccount.com')
+            role: The IAM role to grant
+
+        Returns:
+            True if access was granted, False if already had access
+        """
+        if self.has_access(secret_id, member, role):
+            return False
+
+        self.grant_access(secret_id, member, role)
+        return True
+
     def ensure_secret(self, secret_id: str, value: str) -> Dict[str, str]:
         """
         Ensure a secret exists with the given value (idempotent).

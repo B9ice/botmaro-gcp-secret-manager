@@ -8,16 +8,32 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- **Automatic service account access grants during bootstrap**
+  - Configure service accounts in `secrets.yml` at environment and project levels
+  - Bootstrap command automatically grants `secretAccessor` role to configured service accounts
+  - Idempotent access granting: only grants if access is missing
+  - New `service_accounts` field in EnvironmentConfig and ProjectConfig
+  - New GSM methods: `has_access()`, `ensure_access()`
+  - Automatic inheritance: project secrets get both env-level and project-level service accounts
 - Bulk IAM permission granting via `grant-access` command
   - Grant access to all secrets in an environment or project scope
   - Support for multiple service accounts via repeatable `--sa` flag
   - Interactive confirmation with preview of affected secrets
   - Python API: `grant_access_bulk()` method in SecretsManager
-- Comprehensive documentation for grant-access in README
+- Placeholder highlighting in list command
+  - Placeholder values displayed in red for easy identification
+  - Works with both masked and revealed values
+- Scope filtering in list command
+  - New `--scope` option with values: `env`, `project`, `all`
+  - Filter secrets by environment-level or project-level
+  - Returns 3-tuple with scope information
+- Comprehensive documentation for automatic access grants in README
 - Auto-merge workflow: automatically merges `develop` into `main` when all tests pass
 - Type checking improvements and mypy compliance
 
 ### Changed
+- Bootstrap command now reads and applies service accounts from config automatically
+- `--runtime-sa` and `--deployer-sa` flags now add to configured service accounts (not replace)
 - Updated Python type annotations for better mypy compatibility
 - Changed mypy Python version target from 3.8 to 3.9
 - Clarified README documentation to emphasize this tool IS the GCP interface

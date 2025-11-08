@@ -72,12 +72,14 @@ class SecretsManager:
         """
         Bootstrap an environment by loading all secrets.
 
+        Automatically grants access to service accounts configured in secrets.yml.
+
         Args:
             env: Environment name (staging, prod, etc.)
             project: Optional project name to scope to
             export_to_env: Whether to export secrets to os.environ
-            runtime_sa: Optional runtime service account to grant access
-            deployer_sa: Optional deployer service account to grant access
+            runtime_sa: Optional runtime service account to grant access (in addition to config)
+            deployer_sa: Optional deployer service account to grant access (in addition to config)
 
         Returns:
             Dict of secret names to values
@@ -88,6 +90,13 @@ class SecretsManager:
 
         gsm = self._get_gsm_client(env_config.gcp_project)
         secrets = {}
+
+        # Collect service accounts from config
+        service_accounts_to_grant = set(env_config.service_accounts)
+        if runtime_sa:
+            service_accounts_to_grant.add(runtime_sa)
+        if deployer_sa:
+            service_accounts_to_grant.add(deployer_sa)
 
         # Load global secrets
         for secret_config in env_config.global_secrets:
@@ -104,11 +113,21 @@ class SecretsManager:
             if export_to_env:
                 os.environ[secret_config.name] = value
 
+            # Grant access to configured service accounts
+            for sa in service_accounts_to_grant:
+                member = f"serviceAccount:{sa}" if not sa.startswith("serviceAccount:") else sa
+                gsm.ensure_access(secret_name, member)
+
         # Load project-specific secrets if project is specified
         if project:
             project_config = env_config.projects.get(project)
             if not project_config:
                 raise ValueError(f"Project '{project}' not found in environment '{env}'")
+
+            # Add project-level service accounts
+            project_service_accounts = set(service_accounts_to_grant)
+            if project_config.service_accounts:
+                project_service_accounts.update(project_config.service_accounts)
 
             for secret_config in project_config.secrets:
                 secret_name = self._get_secret_name(env, project, secret_config.name)
@@ -124,14 +143,10 @@ class SecretsManager:
                 if export_to_env:
                     os.environ[secret_config.name] = value
 
-        # Grant access to service accounts if specified
-        if runtime_sa or deployer_sa:
-            for secret_name in secrets.keys():
-                full_secret_name = self._get_secret_name(env, project, secret_name)
-                if runtime_sa:
-                    gsm.grant_access(full_secret_name, f"serviceAccount:{runtime_sa}")
-                if deployer_sa:
-                    gsm.grant_access(full_secret_name, f"serviceAccount:{deployer_sa}")
+                # Grant access to configured service accounts (environment + project)
+                for sa in project_service_accounts:
+                    member = f"serviceAccount:{sa}" if not sa.startswith("serviceAccount:") else sa
+                    gsm.ensure_access(secret_name, member)
 
         return secrets
 
