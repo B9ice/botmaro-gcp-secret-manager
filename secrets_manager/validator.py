@@ -78,7 +78,7 @@ class SecretsValidator:
         Returns:
             Set of secret names referenced in the workflow
         """
-        secrets = set()
+        secrets: Set[str] = set()
 
         try:
             with open(workflow_path, "r") as f:
@@ -132,7 +132,7 @@ class SecretsValidator:
         Returns:
             Set of all secret names referenced across workflows
         """
-        secrets = set()
+        secrets: Set[str] = set()
 
         if not workflow_dir.exists() or not workflow_dir.is_dir():
             return secrets
