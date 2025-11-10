@@ -44,10 +44,10 @@ class DotenvFormatter(BaseFormatter):
             escaped_value = value.replace("\\", "\\\\").replace('"', '\\"').replace("\n", "\\n")
 
             # Quote value if it contains spaces or special chars
-            if " " in value or "#" in value or any(c in value for c in ["$", "`", "!", "&", "*"]):
+            if " " in value or "#" in value or "\n" in value or any(c in value for c in ["$", "`", "!", "&", "*"]):
                 lines.append(f'{key}="{escaped_value}"')
             else:
-                lines.append(f"{key}={value}")
+                lines.append(f"{key}={escaped_value}")
 
         return "\n".join(lines)
 
@@ -126,12 +126,10 @@ class GitHubOutputFormatter(BaseFormatter):
             lines.append("")
 
         for key, value in sorted(secrets.items()):
-            if "\n" in value:
-                lines.append(f"{key}<<EOF")
-                lines.append(value)
-                lines.append("EOF")
-            else:
-                lines.append(f"{key}={value}")
+            # Use heredoc format for all values (GitHub Actions best practice)
+            lines.append(f"{key}<<EOF")
+            lines.append(value)
+            lines.append("EOF")
 
         return "\n".join(lines)
 
