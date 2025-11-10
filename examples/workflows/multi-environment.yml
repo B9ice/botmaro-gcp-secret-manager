@@ -1,0 +1,95 @@
+name: Multi-Environment Deployment
+
+# This workflow demonstrates deploying to multiple environments
+# with different secrets for each environment
+
+on:
+  push:
+    branches:
+      - main
+      - develop
+      - staging
+  workflow_dispatch:
+    inputs:
+      environment:
+        description: 'Environment to deploy to'
+        required: true
+        type: choice
+        options:
+          - development
+          - staging
+          - production
+
+permissions:
+  contents: read
+  id-token: write
+
+env:
+  GCP_PROJECT_ID: my-gcp-project
+  WORKLOAD_IDENTITY_PROVIDER: projects/123456789/locations/global/workloadIdentityPools/github/providers/github-provider
+  SERVICE_ACCOUNT: github-actions@my-gcp-project.iam.gserviceaccount.com
+
+jobs:
+  # Determine environment based on branch or manual input
+  determine-environment:
+    runs-on: ubuntu-latest
+    outputs:
+      environment: ${{ steps.set-env.outputs.environment }}
+    steps:
+      - name: Determine environment
+        id: set-env
+        run: |
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            echo "environment=${{ inputs.environment }}" >> $GITHUB_OUTPUT
+          elif [ "${{ github.ref }}" = "refs/heads/main" ]; then
+            echo "environment=production" >> $GITHUB_OUTPUT
+          elif [ "${{ github.ref }}" = "refs/heads/staging" ]; then
+            echo "environment=staging" >> $GITHUB_OUTPUT
+          else
+            echo "environment=development" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Show selected environment
+        run: echo "Deploying to ${{ steps.set-env.outputs.environment }}"
+
+  deploy:
+    needs: determine-environment
+    runs-on: ubuntu-latest
+    environment: ${{ needs.determine-environment.outputs.environment }}
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Load secrets for ${{ needs.determine-environment.outputs.environment }}
+        id: secrets
+        uses: ./.github/actions/setup-secrets
+        with:
+          environment: ${{ needs.determine-environment.outputs.environment }}
+          gcp-project-id: ${{ env.GCP_PROJECT_ID }}
+          workload-identity-provider: ${{ env.WORKLOAD_IDENTITY_PROVIDER }}
+          service-account: ${{ env.SERVICE_ACCOUNT }}
+
+      - name: Display loaded secrets
+        run: |
+          echo "Environment: ${{ needs.determine-environment.outputs.environment }}"
+          echo "Secrets loaded: ${{ steps.secrets.outputs.secrets-count }}"
+          echo "Validation: ${{ steps.secrets.outputs.validation-passed }}"
+
+      - name: Build application
+        run: |
+          echo "Building for ${{ needs.determine-environment.outputs.environment }}..."
+          npm install
+          npm run build
+
+      - name: Deploy
+        run: |
+          echo "Deploying to ${{ needs.determine-environment.outputs.environment }}..."
+          ./scripts/deploy.sh
+        env:
+          ENVIRONMENT: ${{ needs.determine-environment.outputs.environment }}
+
+      - name: Smoke tests
+        run: |
+          echo "Running smoke tests..."
+          npm run test:smoke

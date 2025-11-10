@@ -1,0 +1,169 @@
+name: 'Setup GCP Secrets'
+description: 'Load secrets from GCP Secret Manager into GitHub Actions workflow environment'
+author: 'Botmaro'
+
+branding:
+  icon: 'lock'
+  color: 'blue'
+
+inputs:
+  environment:
+    description: 'Environment name (staging, production, etc.)'
+    required: true
+  project:
+    description: 'Project name (optional, for project-scoped secrets)'
+    required: false
+    default: ''
+  gcp-project-id:
+    description: 'GCP Project ID containing the secrets'
+    required: true
+  workload-identity-provider:
+    description: 'Workload Identity Provider for GCP authentication'
+    required: true
+  service-account:
+    description: 'Service account email for impersonation'
+    required: true
+  config-path:
+    description: 'Path to secrets.yml configuration file'
+    required: false
+    default: 'secrets.yml'
+  validate:
+    description: 'Run validation check before export'
+    required: false
+    default: 'true'
+  mask-values:
+    description: 'Mask secret values in GitHub Actions logs'
+    required: false
+    default: 'true'
+  python-version:
+    description: 'Python version to use'
+    required: false
+    default: '3.11'
+
+outputs:
+  secrets-count:
+    description: 'Number of secrets loaded'
+    value: ${{ steps.export.outputs.count }}
+  validation-passed:
+    description: 'Whether validation passed (true/false)'
+    value: ${{ steps.validate.outputs.passed }}
+
+runs:
+  using: 'composite'
+  steps:
+    - name: Set up Python
+      uses: actions/setup-python@v5
+      with:
+        python-version: ${{ inputs.python-version }}
+
+    - name: Install botmaro-secrets-manager
+      shell: bash
+      run: |
+        echo "::group::Installing botmaro-secrets-manager"
+        pip install --quiet --upgrade pip
+        pip install --quiet botmaro-gcp-secret-manager
+        echo "✅ Installed botmaro-secrets-manager"
+        echo "::endgroup::"
+
+    - name: Authenticate to GCP
+      uses: google-github-actions/auth@v2
+      with:
+        workload_identity_provider: ${{ inputs.workload-identity-provider }}
+        service_account: ${{ inputs.service-account }}
+
+    - name: Validate secrets configuration
+      id: validate
+      if: inputs.validate == 'true'
+      shell: bash
+      env:
+        ENVIRONMENT: ${{ inputs.environment }}
+        PROJECT: ${{ inputs.project }}
+        CONFIG: ${{ inputs.config-path }}
+      run: |
+        echo "::group::Validating secrets configuration"
+
+        # Build command
+        CMD="secrets-manager check $ENVIRONMENT"
+
+        # Add optional parameters
+        if [ -n "$PROJECT" ]; then
+          CMD="$CMD --project $PROJECT"
+        fi
+
+        if [ -f "$CONFIG" ]; then
+          CMD="$CMD --config $CONFIG"
+        fi
+
+        # Add workflows directory if it exists
+        if [ -d ".github/workflows" ]; then
+          CMD="$CMD --workflows .github/workflows"
+        fi
+
+        # Run validation
+        if $CMD --verbose; then
+          echo "passed=true" >> $GITHUB_OUTPUT
+          echo "✅ Validation passed"
+        else
+          echo "passed=false" >> $GITHUB_OUTPUT
+          echo "❌ Validation failed"
+          exit 1
+        fi
+
+        echo "::endgroup::"
+
+    - name: Export secrets to environment
+      id: export
+      shell: bash
+      env:
+        ENVIRONMENT: ${{ inputs.environment }}
+        PROJECT: ${{ inputs.project }}
+        CONFIG: ${{ inputs.config-path }}
+        MASK: ${{ inputs.mask-values }}
+      run: |
+        echo "::group::Exporting secrets from GCP Secret Manager"
+
+        # Build command
+        CMD="secrets-manager export $ENVIRONMENT --github-env"
+
+        # Add optional parameters
+        if [ -n "$PROJECT" ]; then
+          CMD="$CMD --project $PROJECT"
+        fi
+
+        if [ -f "$CONFIG" ]; then
+          CMD="$CMD --config $CONFIG"
+        fi
+
+        if [ "$MASK" = "false" ]; then
+          CMD="$CMD --no-mask"
+        fi
+
+        # Run export and capture output
+        echo "Running: $CMD"
+        $CMD --verbose
+
+        # Count exported secrets (from the list command)
+        COUNT_CMD="secrets-manager list $ENVIRONMENT"
+        if [ -n "$PROJECT" ]; then
+          COUNT_CMD="$COUNT_CMD --project $PROJECT"
+        fi
+        if [ -f "$CONFIG" ]; then
+          COUNT_CMD="$COUNT_CMD --config $CONFIG"
+        fi
+
+        # Get count from list output
+        COUNT=$($COUNT_CMD 2>/dev/null | grep "Total:" | awk '{print $2}')
+        if [ -z "$COUNT" ]; then
+          COUNT="0"
+        fi
+
+        echo "count=$COUNT" >> $GITHUB_OUTPUT
+        echo "✅ Loaded $COUNT secrets from GCP Secret Manager"
+        echo "::endgroup::"
+
+    - name: Verify secrets loaded
+      shell: bash
+      run: |
+        echo "🔐 Secrets are now available as environment variables in subsequent steps"
+        echo "📊 Total secrets loaded: ${{ steps.export.outputs.count }}"
+        echo "✅ Validation status: ${{ steps.validate.outputs.passed }}"

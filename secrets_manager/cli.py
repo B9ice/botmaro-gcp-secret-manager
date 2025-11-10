@@ -11,6 +11,7 @@ from rich import print as rprint
 
 from .core import SecretsManager
 from .config import SecretsConfig
+from .formatters import get_formatter, write_github_env, write_github_output
 
 app = typer.Typer(
     name="secrets-manager",
@@ -129,6 +130,131 @@ def bootstrap(
                 for key, value in secrets.items():
                     f.write(f"{key}={value}\n")
             console.print(f"[green]✓[/green] Secrets written to {output_path}")
+
+    except Exception as e:
+        console.print(f"[red]✗ Error:[/red] {str(e)}", style="bold red")
+        raise typer.Exit(code=1)
+
+
+@app.command()
+def export(
+    env: str = typer.Argument(..., help="Environment name (e.g., staging, prod)"),
+    project: Optional[str] = typer.Option(
+        None, "--project", "-p", help="Project name to scope secrets"
+    ),
+    config: Optional[str] = typer.Option(
+        None, "--config", "-c", help="Path to secrets config file"
+    ),
+    format: str = typer.Option(
+        "dotenv",
+        "--format",
+        "-f",
+        help="Export format: dotenv, github-env, github-output, json, yaml, shell",
+    ),
+    output: Optional[str] = typer.Option(
+        None, "--output", "-o", help="Output file (default: stdout)"
+    ),
+    mask: bool = typer.Option(
+        True, "--mask/--no-mask", help="Mask secrets in logs (for GitHub Actions formats)"
+    ),
+    github_env: bool = typer.Option(
+        False, "--github-env", help="Write directly to $GITHUB_ENV (GitHub Actions only)"
+    ),
+    github_output: bool = typer.Option(
+        False, "--github-output", help="Write directly to $GITHUB_OUTPUT (GitHub Actions only)"
+    ),
+    verbose: bool = typer.Option(False, "--verbose", "-v", help="Verbose output"),
+):
+    """
+    Export secrets in various formats for CI/CD integration.
+
+    This command exports secrets from GCP Secret Manager in different formats
+    suitable for CI/CD systems, especially GitHub Actions.
+
+    Examples:
+        \\b
+        # Export as .env file
+        secrets-manager export staging --format dotenv --output .env.staging
+
+        \\b
+        # Export as JSON
+        secrets-manager export prod --format json --output secrets.json
+
+        \\b
+        # Export for GitHub Actions (in workflow)
+        secrets-manager export staging --format github-env --output $GITHUB_ENV
+
+        \\b
+        # Or use the convenience flag
+        secrets-manager export staging --github-env
+
+        \\b
+        # Export as shell script
+        secrets-manager export staging --format shell --output secrets.sh
+
+        \\b
+        # Export with project scope
+        secrets-manager export staging --project myapp --format yaml
+    """
+    try:
+        # Load config
+        if config:
+            os.environ["SECRETS_CONFIG_PATH"] = config
+
+        manager = SecretsManager()
+
+        # Load secrets
+        with console.status(f"[bold green]Loading secrets for {env}..."):
+            secrets = manager.bootstrap(
+                env=env,
+                project=project,
+                export_to_env=False,  # Don't export to environment automatically
+            )
+
+        if verbose:
+            console.print(f"[green]✓[/green] Loaded {len(secrets)} secrets")
+
+        # Get formatter
+        try:
+            formatter = get_formatter(format)
+        except ValueError as e:
+            console.print(f"[red]✗ Error:[/red] {str(e)}", style="bold red")
+            raise typer.Exit(code=1)
+
+        # Format secrets
+        formatted = formatter.format(secrets, mask=mask)
+
+        # Handle GitHub Actions special cases
+        if github_env:
+            try:
+                write_github_env(secrets, mask=mask)
+                console.print("[green]✓[/green] Secrets written to $GITHUB_ENV")
+                return
+            except RuntimeError as e:
+                console.print(f"[red]✗ Error:[/red] {str(e)}", style="bold red")
+                raise typer.Exit(code=1)
+
+        if github_output:
+            try:
+                write_github_output(secrets, mask=mask)
+                console.print("[green]✓[/green] Secrets written to $GITHUB_OUTPUT")
+                return
+            except RuntimeError as e:
+                console.print(f"[red]✗ Error:[/red] {str(e)}", style="bold red")
+                raise typer.Exit(code=1)
+
+        # Write to file or stdout
+        if output:
+            output_path = Path(output)
+            with open(output_path, "w") as f:
+                f.write(formatted)
+                if not formatted.endswith("\n"):
+                    f.write("\n")
+
+            console.print(f"[green]✓[/green] Secrets exported to {output_path} ({format} format)")
+        else:
+            # Output to stdout
+            console.print(formatted)
 
     except Exception as e:
         console.print(f"[red]✗ Error:[/red] {str(e)}", style="bold red")
