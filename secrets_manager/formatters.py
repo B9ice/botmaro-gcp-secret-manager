@@ -44,7 +44,12 @@ class DotenvFormatter(BaseFormatter):
             escaped_value = value.replace("\\", "\\\\").replace('"', '\\"').replace("\n", "\\n")
 
             # Quote value if it contains spaces or special chars
-            if " " in value or "#" in value or "\n" in value or any(c in value for c in ["$", "`", "!", "&", "*"]):
+            if (
+                " " in value
+                or "#" in value
+                or "\n" in value
+                or any(c in value for c in ["$", "`", "!", "&", "*"])
+            ):
                 lines.append(f'{key}="{escaped_value}"')
             else:
                 lines.append(f"{key}={escaped_value}")
@@ -183,7 +188,10 @@ class YamlFormatter(BaseFormatter):
                 lines.append(f"{key}: |")
                 for line in value.split("\n"):
                     lines.append(f"  {line}")
-            elif any(c in value for c in [':', '#', '[', ']', '{', '}', '&', '*', '!', '|', '>', '@', '`']):
+            elif any(
+                c in value
+                for c in [":", "#", "[", "]", "{", "}", "&", "*", "!", "|", ">", "@", "`"]
+            ):
                 # Value needs quoting
                 escaped = value.replace('"', '\\"')
                 lines.append(f'{key}: "{escaped}"')
@@ -248,9 +256,7 @@ def get_formatter(format_name: str) -> BaseFormatter:
     formatter = formatters.get(format_name.lower())
     if not formatter:
         valid_formats = ", ".join(sorted(set(formatters.keys())))
-        raise ValueError(
-            f"Invalid format '{format_name}'. Valid formats: {valid_formats}"
-        )
+        raise ValueError(f"Invalid format '{format_name}'. Valid formats: {valid_formats}")
 
     return formatter
 
