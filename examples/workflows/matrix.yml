@@ -1,0 +1,96 @@
+name: Matrix Deployment
+
+# This workflow demonstrates using a matrix strategy to deploy
+# multiple projects with different secrets for each project
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  id-token: write
+
+env:
+  GCP_PROJECT_ID: my-gcp-project
+  WORKLOAD_IDENTITY_PROVIDER: projects/123456789/locations/global/workloadIdentityPools/github/providers/github-provider
+  SERVICE_ACCOUNT: github-actions@my-gcp-project.iam.gserviceaccount.com
+
+jobs:
+  deploy-projects:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        include:
+          - project: web-app
+            environment: production
+            deployment-type: frontend
+          - project: api-service
+            environment: production
+            deployment-type: backend
+          - project: worker
+            environment: production
+            deployment-type: background
+      fail-fast: false  # Continue deploying other projects even if one fails
+
+    name: Deploy ${{ matrix.project }} to ${{ matrix.environment }}
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Load secrets for ${{ matrix.project }}
+        id: secrets
+        uses: ./.github/actions/setup-secrets
+        with:
+          environment: ${{ matrix.environment }}
+          project: ${{ matrix.project }}
+          gcp-project-id: ${{ env.GCP_PROJECT_ID }}
+          workload-identity-provider: ${{ env.WORKLOAD_IDENTITY_PROVIDER }}
+          service-account: ${{ env.SERVICE_ACCOUNT }}
+
+      - name: Display project info
+        run: |
+          echo "Project: ${{ matrix.project }}"
+          echo "Environment: ${{ matrix.environment }}"
+          echo "Type: ${{ matrix.deployment-type }}"
+          echo "Secrets loaded: ${{ steps.secrets.outputs.secrets-count }}"
+
+      - name: Setup project-specific dependencies
+        run: |
+          cd projects/${{ matrix.project }}
+          npm install
+
+      - name: Build ${{ matrix.project }}
+        run: |
+          cd projects/${{ matrix.project }}
+          npm run build
+
+      - name: Deploy ${{ matrix.project }}
+        run: |
+          cd projects/${{ matrix.project }}
+          ./deploy.sh
+        env:
+          PROJECT_NAME: ${{ matrix.project }}
+          DEPLOYMENT_TYPE: ${{ matrix.deployment-type }}
+
+      - name: Verify deployment
+        run: |
+          echo "Verifying ${{ matrix.project }} deployment..."
+          curl -f https://${{ matrix.project }}.example.com/health || exit 1
+
+  notify:
+    needs: deploy-projects
+    runs-on: ubuntu-latest
+    if: always()
+
+    steps:
+      - name: Notify deployment status
+        run: |
+          if [ "${{ needs.deploy-projects.result }}" = "success" ]; then
+            echo "✅ All projects deployed successfully"
+          else
+            echo "❌ Some projects failed to deploy"
+            exit 1
+          fi

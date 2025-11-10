@@ -8,7 +8,10 @@ A standalone, environment-aware secret management tool built on Google Secret Ma
 - 🎯 **Project scoping** - Organize secrets by project within environments
 - 🔄 **Version control** - Leverage GSM's built-in versioning
 - 🚀 **CI/CD ready** - Bootstrap secrets in GitHub Actions or any CI/CD pipeline
+- 📤 **Multiple export formats** - Export secrets in dotenv, JSON, YAML, GitHub Actions, and shell formats
+- 🔗 **GitHub Actions integration** - Native composite action for seamless workflow integration
 - 🛠️ **CRUD operations** - Full create, read, update, delete support via CLI
+- ✅ **Validation & checks** - Validate secrets before deployment, detect placeholders
 - 📦 **Pip installable** - Install as a standalone package
 - 🎨 **Rich CLI** - Beautiful, user-friendly command-line interface
 - 🔒 **IAM integration** - Automatic service account access management
@@ -231,6 +234,63 @@ secrets-manager delete staging.OLD_API_KEY
 secrets-manager delete staging.OLD_API_KEY --force
 ```
 
+#### Export Command
+
+Export secrets in various formats for CI/CD integration:
+
+```bash
+secrets-manager export <environment> [OPTIONS]
+
+Options:
+  --project, -p TEXT       Project name to scope secrets
+  --config, -c TEXT        Path to secrets config file
+  --format, -f TEXT        Export format: dotenv, github-env, github-output, json, yaml, shell [default: dotenv]
+  --output, -o TEXT        Output file (default: stdout)
+  --mask/--no-mask         Mask secrets in logs (for GitHub Actions formats) [default: True]
+  --github-env             Write directly to $GITHUB_ENV (GitHub Actions only)
+  --github-output          Write directly to $GITHUB_OUTPUT (GitHub Actions only)
+  --verbose, -v            Verbose output
+```
+
+**Supported Formats:**
+- `dotenv` / `env` - Standard .env file format (KEY=value)
+- `github-env` - GitHub Actions environment file format with multiline support
+- `github-output` - GitHub Actions job outputs format
+- `json` - JSON object
+- `yaml` / `yml` - YAML format
+- `shell` / `sh` - Shell export script
+
+**Examples:**
+
+```bash
+# Export as .env file
+secrets-manager export staging --format dotenv --output .env.staging
+
+# Export as JSON
+secrets-manager export prod --format json --output secrets.json
+
+# Export to stdout (for piping)
+secrets-manager export staging --format yaml
+
+# Export with project scope
+secrets-manager export staging --project myapp --format dotenv --output .env.myapp
+
+# Export for GitHub Actions (in workflow)
+secrets-manager export production --github-env
+
+# Export as shell script
+secrets-manager export staging --format shell --output load-secrets.sh
+chmod +x load-secrets.sh
+source load-secrets.sh
+```
+
+**Use Cases:**
+- Export secrets for local development (.env files)
+- Generate configuration files in various formats
+- Load secrets into GitHub Actions workflows
+- Create shell scripts for environment setup
+- Generate JSON/YAML for application configuration
+
 #### Grant Access Command
 
 Grant access to all secrets in an environment or project:
@@ -344,7 +404,56 @@ Validation Summary:
 
 ## GitHub Actions Integration
 
-### Example Workflow
+Botmaro Secrets Manager provides native GitHub Actions integration through a composite action that automatically loads secrets from GCP Secret Manager into your workflows.
+
+### Using the Composite Action (Recommended)
+
+The easiest way to use secrets in GitHub Actions is with our composite action:
+
+```yaml
+name: Deploy to Production
+
+on:
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+  id-token: write  # Required for Workload Identity Federation
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    environment: production
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Load Secrets from GCP
+        uses: ./.github/actions/setup-secrets
+        with:
+          environment: production
+          gcp-project-id: my-gcp-project
+          workload-identity-provider: projects/123456789/locations/global/workloadIdentityPools/github/providers/github-provider
+          service-account: github-actions@my-gcp-project.iam.gserviceaccount.com
+
+      - name: Deploy Application
+        run: |
+          # All secrets are now available as environment variables
+          ./deploy.sh
+```
+
+**Key Features:**
+- ✅ Automatic authentication with Workload Identity Federation
+- ✅ Built-in secrets validation
+- ✅ Automatic secret masking in logs
+- ✅ Zero secret duplication
+
+📖 **Full Documentation**: See [GITHUB_ACTIONS.md](GITHUB_ACTIONS.md) for complete setup instructions, including Workload Identity Federation configuration.
+
+### Manual CLI Integration
+
+You can also use the CLI directly in your workflows:
 
 ```yaml
 name: Deploy
@@ -358,32 +467,29 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@v4
 
-      - name: Set up Python
-        uses: actions/setup-python@v4
+      - uses: actions/setup-python@v5
         with:
           python-version: '3.11'
 
-      - name: Install secrets manager
-        run: pip install -e .
+      - name: Install secrets-manager
+        run: pip install botmaro-gcp-secret-manager
 
-      - name: Authenticate to Google Cloud
-        uses: google-github-actions/auth@v1
+      - uses: google-github-actions/auth@v2
         with:
-          credentials_json: ${{ secrets.GCP_SA_KEY }}
+          workload_identity_provider: projects/.../providers/github-provider
+          service_account: github-actions@project.iam.gserviceaccount.com
 
-      - name: Bootstrap secrets
+      - name: Export secrets to GitHub environment
         run: |
-          secrets-manager bootstrap staging \
-            --runtime-sa botmaro-runner@project.iam.gserviceaccount.com \
-            --config secrets.yml
+          secrets-manager export production --github-env
 
       - name: Deploy application
         run: |
-          # Your deployment commands here
-          # All secrets are now available as environment variables
-          echo "Deploying with SUPABASE_URL=$SUPABASE_URL"
+          # Secrets are now available
+          echo "Deploying..."
+          ./deploy.sh
 ```
 
 ### Setting up initial secrets
@@ -397,12 +503,11 @@ Before running in GitHub Actions, you need to populate secrets using this tool's
 gcloud auth application-default login
 
 # 2. Use secrets-manager CLI to create and manage secrets
-secrets-manager set staging.SUPABASE_URL --value "https://xxx.supabase.co"
-secrets-manager set staging.SUPABASE_ANON_KEY --value "eyJxxx..."
-secrets-manager set staging.SUPABASE_SERVICE_ROLE_KEY --value "eyJxxx..."
+secrets-manager set production.API_KEY --value "sk-123456"
+secrets-manager set production.DATABASE_URL --value "postgres://..."
 
 # 3. Verify secrets were created
-secrets-manager list staging --reveal
+secrets-manager list production --reveal
 ```
 
 The `secrets-manager` CLI automatically creates secrets in Google Secret Manager with proper naming conventions and IAM permissions.

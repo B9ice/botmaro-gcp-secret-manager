@@ -1,0 +1,64 @@
+name: Simple Deployment
+
+# This workflow demonstrates basic usage of the setup-secrets action
+# to load secrets from GCP Secret Manager and deploy an application
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  id-token: write  # Required for Workload Identity Federation
+
+env:
+  GCP_PROJECT_ID: my-gcp-project
+  WORKLOAD_IDENTITY_PROVIDER: projects/123456789/locations/global/workloadIdentityPools/github/providers/github-provider
+  SERVICE_ACCOUNT: github-actions@my-gcp-project.iam.gserviceaccount.com
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    environment: production
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Load Production Secrets
+        id: secrets
+        uses: ./.github/actions/setup-secrets
+        with:
+          environment: production
+          gcp-project-id: ${{ env.GCP_PROJECT_ID }}
+          workload-identity-provider: ${{ env.WORKLOAD_IDENTITY_PROVIDER }}
+          service-account: ${{ env.SERVICE_ACCOUNT }}
+
+      - name: Show secrets loaded
+        run: |
+          echo "✅ Loaded ${{ steps.secrets.outputs.secrets-count }} secrets"
+          echo "✅ Validation passed: ${{ steps.secrets.outputs.validation-passed }}"
+
+      # Secrets are now available as environment variables
+      - name: Build application
+        run: |
+          echo "Building with configuration from secrets..."
+          # Example: API_KEY, DATABASE_URL, etc. are now available
+          npm install
+          npm run build
+
+      - name: Deploy to production
+        run: |
+          echo "Deploying application..."
+          # Secrets are automatically available in the environment
+          ./scripts/deploy.sh
+        env:
+          # Secrets are already in the environment, but you can explicitly reference them
+          DEPLOYMENT_ENV: production
+
+      - name: Health check
+        run: |
+          echo "Running health checks..."
+          # Use secrets for API calls, database connections, etc.
+          curl -H "Authorization: Bearer $API_KEY" https://api.example.com/health
