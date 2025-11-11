@@ -1,0 +1,125 @@
+name: Auto Release on Version Bump
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - 'pyproject.toml'
+
+permissions:
+  contents: write
+
+jobs:
+  check-and-release:
+    name: Check for version bump and create release tag
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0  # Need full history to compare versions
+
+      - name: Get current version from pyproject.toml
+        id: current_version
+        run: |
+          VERSION=$(grep '^version = ' pyproject.toml | sed 's/version = "\(.*\)"/\1/')
+          echo "version=$VERSION" >> $GITHUB_OUTPUT
+          echo "Current version in pyproject.toml: $VERSION"
+
+      - name: Check if tag already exists
+        id: check_tag
+        run: |
+          VERSION=${{ steps.current_version.outputs.version }}
+          if git rev-parse "v$VERSION" >/dev/null 2>&1; then
+            echo "exists=true" >> $GITHUB_OUTPUT
+            echo "Tag v$VERSION already exists"
+          else
+            echo "exists=false" >> $GITHUB_OUTPUT
+            echo "Tag v$VERSION does not exist"
+          fi
+
+      - name: Get previous version from last tag
+        id: previous_version
+        if: steps.check_tag.outputs.exists == 'false'
+        run: |
+          PREV_TAG=$(git describe --tags --abbrev=0 2>/dev/null || echo "v0.0.0")
+          PREV_VERSION=${PREV_TAG#v}
+          echo "version=$PREV_VERSION" >> $GITHUB_OUTPUT
+          echo "Previous version: $PREV_VERSION"
+
+      - name: Compare versions
+        id: compare
+        if: steps.check_tag.outputs.exists == 'false'
+        run: |
+          CURRENT="${{ steps.current_version.outputs.version }}"
+          PREVIOUS="${{ steps.previous_version.outputs.version }}"
+
+          if [ "$CURRENT" != "$PREVIOUS" ]; then
+            echo "is_bump=true" >> $GITHUB_OUTPUT
+            echo "✅ Version bump detected: $PREVIOUS → $CURRENT"
+          else
+            echo "is_bump=false" >> $GITHUB_OUTPUT
+            echo "No version change detected"
+          fi
+
+      - name: Verify CHANGELOG.md updated
+        id: check_changelog
+        if: steps.compare.outputs.is_bump == 'true'
+        run: |
+          VERSION="${{ steps.current_version.outputs.version }}"
+          if grep -q "## \[$VERSION\]" CHANGELOG.md; then
+            echo "updated=true" >> $GITHUB_OUTPUT
+            echo "✅ CHANGELOG.md contains entry for version $VERSION"
+          else
+            echo "updated=false" >> $GITHUB_OUTPUT
+            echo "⚠️  WARNING: CHANGELOG.md does not contain entry for version $VERSION"
+          fi
+
+      - name: Create and push tag
+        if: steps.compare.outputs.is_bump == 'true' && steps.check_tag.outputs.exists == 'false'
+        run: |
+          VERSION="${{ steps.current_version.outputs.version }}"
+
+          # Configure git
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+
+          # Create annotated tag
+          git tag -a "v$VERSION" -m "Release version $VERSION"
+
+          # Push tag
+          git push origin "v$VERSION"
+
+          echo "🚀 Created and pushed tag v$VERSION"
+          echo "This will trigger the PyPI publish workflow"
+
+      - name: Summary
+        if: steps.compare.outputs.is_bump == 'true' && steps.check_tag.outputs.exists == 'false'
+        run: |
+          VERSION="${{ steps.current_version.outputs.version }}"
+          CHANGELOG_STATUS="${{ steps.check_changelog.outputs.updated }}"
+
+          echo "## Release Summary" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "✅ **Version:** $VERSION" >> $GITHUB_STEP_SUMMARY
+          echo "✅ **Tag Created:** v$VERSION" >> $GITHUB_STEP_SUMMARY
+
+          if [ "$CHANGELOG_STATUS" == "true" ]; then
+            echo "✅ **CHANGELOG.md:** Updated" >> $GITHUB_STEP_SUMMARY
+          else
+            echo "⚠️  **CHANGELOG.md:** Not updated (consider adding release notes)" >> $GITHUB_STEP_SUMMARY
+          fi
+
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "The [PyPI publish workflow](https://github.com/${{ github.repository }}/actions/workflows/publish-pypi.yml) should now be triggered automatically." >> $GITHUB_STEP_SUMMARY
+
+      - name: No action needed
+        if: steps.compare.outputs.is_bump != 'true' || steps.check_tag.outputs.exists == 'true'
+        run: |
+          if [ "${{ steps.check_tag.outputs.exists }}" == "true" ]; then
+            echo "ℹ️  Tag v${{ steps.current_version.outputs.version }} already exists, skipping"
+          else
+            echo "ℹ️  No version bump detected, skipping tag creation"
+          fi
