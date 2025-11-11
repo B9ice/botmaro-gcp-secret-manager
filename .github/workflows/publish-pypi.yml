@@ -18,6 +18,20 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v4
 
+      - name: Verify triggered by tag
+        run: |
+          if [[ ! "$GITHUB_REF" =~ ^refs/tags/v[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+            echo "❌ Error: This workflow must be triggered by a version tag (e.g., v0.3.0)"
+            echo "Current ref: $GITHUB_REF"
+            echo ""
+            echo "To release:"
+            echo "1. Merge your version bump PR to main"
+            echo "2. The auto-release workflow will create the tag automatically"
+            echo "3. This workflow will then be triggered automatically"
+            exit 1
+          fi
+          echo "✅ Triggered by tag: $GITHUB_REF"
+
       - name: Set up Python
         uses: actions/setup-python@v5
         with:
