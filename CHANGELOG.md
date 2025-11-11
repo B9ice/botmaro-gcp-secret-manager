@@ -7,6 +7,39 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.3.0] - 2025-01-10
+
+### Added
+- **GitHub Actions Integration**
+  - Native GitHub Actions composite action at `.github/actions/setup-secrets/`
+  - Automatic secret loading from GCP Secret Manager into workflow environments
+  - Workload Identity Federation support (no long-lived keys required)
+  - Automatic secret masking in GitHub Actions logs for enhanced security
+  - Example workflows for simple, multi-environment, matrix, and advanced patterns
+  - Comprehensive documentation in `GITHUB_ACTIONS.md` with complete setup guide
+- **Multi-format Secret Export (`export` command)**
+  - New `secrets-manager export` command supporting multiple output formats
+  - Formats: dotenv, JSON, YAML, GitHub Actions, shell scripts
+  - `--github-env` flag for GitHub Actions environment file integration
+  - `--github-output` flag for step outputs in GitHub Actions
+  - Built-in validation before export to ensure secret integrity
+  - Support for environment and project scoping
+  - Enables zero-duplication secret management with GCP as single source of truth
+- **Secret Formatters Module**
+  - New `secrets_manager/formatters.py` with format-specific implementations
+  - Comprehensive test suite for all formatters (`tests/test_formatters.py`)
+  - Proper escaping and quoting for each format type
+  - Support for nested structures in JSON and YAML formats
+
+### Changed
+- Updated README with enhanced CI/CD examples and export command documentation
+- Improved GitHub Actions examples with best practices
+- Enhanced security recommendations for Workload Identity Federation
+
+### Fixed
+- Corrected formatter implementations to match test expectations
+- Applied Black formatting to `formatters.py` for code consistency
+
 ## [0.2.0] - 2025-01-08
 
 ### Added
@@ -80,6 +113,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Secret value masking in CLI output by default
 - Support for reading secrets from stdin for security
 
-[Unreleased]: https://github.com/B9ice/botmaro-gcp-secret-manager/compare/v0.2.0...HEAD
+[Unreleased]: https://github.com/B9ice/botmaro-gcp-secret-manager/compare/v0.3.0...HEAD
+[0.3.0]: https://github.com/B9ice/botmaro-gcp-secret-manager/compare/v0.2.0...v0.3.0
 [0.2.0]: https://github.com/B9ice/botmaro-gcp-secret-manager/compare/v0.1.0...v0.2.0
 [0.1.0]: https://github.com/B9ice/botmaro-gcp-secret-manager/releases/tag/v0.1.0
