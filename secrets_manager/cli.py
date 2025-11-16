@@ -131,6 +131,8 @@ def bootstrap(
                     f.write(f"{key}={value}\n")
             console.print(f"[green]✓[/green] Secrets written to {output_path}")
 
+        raise typer.Exit(code=0)
+
     except Exception as e:
         console.print(f"[red]✗ Error:[/red] {str(e)}", style="bold red")
         raise typer.Exit(code=1)
@@ -229,7 +231,7 @@ def export(
             try:
                 write_github_env(secrets, mask=mask)
                 console.print("[green]✓[/green] Secrets written to $GITHUB_ENV")
-                return
+                raise typer.Exit(code=0)
             except RuntimeError as e:
                 console.print(f"[red]✗ Error:[/red] {str(e)}", style="bold red")
                 raise typer.Exit(code=1)
@@ -238,7 +240,7 @@ def export(
             try:
                 write_github_output(secrets, mask=mask)
                 console.print("[green]✓[/green] Secrets written to $GITHUB_OUTPUT")
-                return
+                raise typer.Exit(code=0)
             except RuntimeError as e:
                 console.print(f"[red]✗ Error:[/red] {str(e)}", style="bold red")
                 raise typer.Exit(code=1)
@@ -255,6 +257,8 @@ def export(
         else:
             # Output to stdout
             console.print(formatted)
+
+        raise typer.Exit(code=0)
 
     except Exception as e:
         console.print(f"[red]✗ Error:[/red] {str(e)}", style="bold red")
@@ -327,6 +331,8 @@ def set(
         console.print(f"[green]✓[/green] Secret [bold]{target_str}[/bold] {result['status']}")
         console.print(f"  Version: {result['version']}")
 
+        raise typer.Exit(code=0)
+
     except Exception as e:
         console.print(f"[red]✗ Error:[/red] {str(e)}", style="bold red")
         raise typer.Exit(code=1)
@@ -379,6 +385,8 @@ def get(
         else:
             masked = f"{value[:4]}...{value[-4:]}" if len(value) > 8 else "***"
             console.print(f"Value: {masked} (use --reveal to show full value)")
+
+        raise typer.Exit(code=0)
 
     except Exception as e:
         console.print(f"[red]✗ Error:[/red] {str(e)}", style="bold red")
@@ -435,6 +443,8 @@ def delete(
             console.print(f"[green]✓[/green] Secret [bold]{target_str}[/bold] deleted")
         else:
             console.print(f"[yellow]![/yellow] Secret not found", style="bold yellow")
+
+        raise typer.Exit(code=0)
 
     except Exception as e:
         console.print(f"[red]✗ Error:[/red] {str(e)}", style="bold red")
@@ -527,6 +537,8 @@ def list(
 
         console.print(table)
         console.print(f"\nTotal: {len(secrets)} secrets")
+
+        raise typer.Exit(code=0)
 
     except Exception as e:
         console.print(f"[red]✗ Error:[/red] {str(e)}", style="bold red")
@@ -626,6 +638,8 @@ def grant_access(
             f"[green]✓[/green] Granted access to {result['secrets_updated']} secrets "
             f"for {result['service_accounts']} service account(s)"
         )
+
+        raise typer.Exit(code=0)
 
     except Exception as e:
         console.print(f"[red]✗ Error:[/red] {str(e)}", style="bold red")
@@ -761,6 +775,7 @@ def version():
     from . import __version__
 
     console.print(f"Botmaro Secrets Manager v{__version__}")
+    raise typer.Exit(code=0)
 
 
 if __name__ == "__main__":
