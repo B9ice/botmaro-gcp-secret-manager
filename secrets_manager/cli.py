@@ -949,7 +949,9 @@ def import_secrets(
         table.add_column("Secret Name", style="cyan")
         table.add_column("Value Preview", style="green")
 
-        for key, value in list(filtered_secrets.items())[:20]:  # Show first 20
+        # Show first 20 secrets
+        items_to_show = [item for item in filtered_secrets.items()][:20]
+        for key, value in items_to_show:
             masked = f"{value[:10]}..." if len(value) > 10 else value
             table.add_row(key, masked)
 
