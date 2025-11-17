@@ -7,6 +7,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.4.1] - 2025-01-16
+
+### Fixed
+- **Import command prefix display bug**
+  - Fixed bug where import command displayed secret names without the environment prefix
+  - Now correctly shows full secret name: `botmaro-staging--SENDGRID_API_KEY` instead of `staging.SENDGRID_API_KEY`
+  - Updated `set_secret()` method to return full secret name in result dictionary
+  - Applied consistent naming display across both `import` and `set` commands
+
 ## [0.4.0] - 2025-01-16
 
 ### Added
@@ -139,7 +148,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Secret value masking in CLI output by default
 - Support for reading secrets from stdin for security
 
-[Unreleased]: https://github.com/B9ice/botmaro-gcp-secret-manager/compare/v0.4.0...HEAD
+[Unreleased]: https://github.com/B9ice/botmaro-gcp-secret-manager/compare/v0.4.1...HEAD
+[0.4.1]: https://github.com/B9ice/botmaro-gcp-secret-manager/compare/v0.4.0...v0.4.1
 [0.4.0]: https://github.com/B9ice/botmaro-gcp-secret-manager/compare/v0.3.0...v0.4.0
 [0.3.0]: https://github.com/B9ice/botmaro-gcp-secret-manager/compare/v0.2.0...v0.3.0
 [0.2.0]: https://github.com/B9ice/botmaro-gcp-secret-manager/compare/v0.1.0...v0.2.0

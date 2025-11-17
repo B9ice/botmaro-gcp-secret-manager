@@ -170,7 +170,7 @@ class SecretsManager:
             grant_to: Optional list of service accounts to grant access
 
         Returns:
-            Dict with status information
+            Dict with status information including the full secret name
         """
         env_config = self.config.get_environment(env)
         if not env_config:
@@ -180,6 +180,9 @@ class SecretsManager:
         secret_name = self._get_secret_name(env, project, secret)
 
         result = gsm.ensure_secret(secret_name, value)
+
+        # Add the full secret name to the result
+        result["secret_name"] = secret_name
 
         # Grant access to specified service accounts
         if grant_to:
