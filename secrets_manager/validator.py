@@ -244,7 +244,9 @@ class SecretsValidator:
                         if sa not in result.placeholder_service_accounts:
                             result.placeholder_service_accounts.append(sa)
                     else:
-                        member = f"serviceAccount:{sa}" if not sa.startswith("serviceAccount:") else sa
+                        member = (
+                            f"serviceAccount:{sa}" if not sa.startswith("serviceAccount:") else sa
+                        )
                         if not self.gsm.has_access(secret_name, member):
                             result.missing_sa_access.append((secret_config.name, sa))
 

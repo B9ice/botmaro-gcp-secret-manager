@@ -57,7 +57,7 @@ class EnvironmentConfig(BaseModel):
 
         # Iterate through all model fields
         for field_name in self.__class__.model_fields.keys():
-            if field_name.endswith('_secrets'):
+            if field_name.endswith("_secrets"):
                 value = getattr(self, field_name, [])
                 if isinstance(value, list):
                     # Parse list items as SecretConfig if they're dicts
@@ -70,9 +70,9 @@ class EnvironmentConfig(BaseModel):
                     secret_categories[field_name] = parsed_secrets
 
         # Also check extra fields (fields not defined in model)
-        if hasattr(self, '__pydantic_extra__') and self.__pydantic_extra__:
+        if hasattr(self, "__pydantic_extra__") and self.__pydantic_extra__:
             for field_name, value in self.__pydantic_extra__.items():
-                if field_name.endswith('_secrets') and isinstance(value, list):
+                if field_name.endswith("_secrets") and isinstance(value, list):
                     # Parse list items as SecretConfig
                     parsed_secrets = []
                     for item in value:
