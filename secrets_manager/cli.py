@@ -327,8 +327,9 @@ def set(
                 grant_to=grant,
             )
 
-        target_str = f"{env}.{project}.{secret}" if project else f"{env}.{secret}"
-        console.print(f"[green]✓[/green] Secret [bold]{target_str}[/bold] {result['status']}")
+        # Use the full secret name from the result (includes prefix)
+        full_secret_name = result.get("secret_name", secret)
+        console.print(f"[green]✓[/green] Secret [bold]{full_secret_name}[/bold] {result['status']}")
         console.print(f"  Version: {result['version']}")
 
         raise typer.Exit(code=0)
@@ -1004,8 +1005,9 @@ def import_secrets(
                         grant_to=grant,
                     )
                     success_count += 1
-                    target = f"{env}.{project}.{secret_name}" if project else f"{env}.{secret_name}"
-                    console.print(f"  [green]✓[/green] {target} ({result['status']})")
+                    # Use the full secret name from the result (includes prefix)
+                    full_secret_name = result.get("secret_name", secret_name)
+                    console.print(f"  [green]✓[/green] {full_secret_name} ({result['status']})")
                 except Exception as e:
                     failed_count += 1
                     failed_secrets.append((secret_name, str(e)))
