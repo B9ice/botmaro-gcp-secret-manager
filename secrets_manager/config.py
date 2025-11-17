@@ -2,10 +2,10 @@
 
 import os
 from pathlib import Path
-from typing import Dict, List, Optional, Union
+from typing import Any, Dict, List, Optional, Union
 import yaml
 import json
-from pydantic import BaseModel, Field, field_validator
+from pydantic import BaseModel, Field, field_validator, ConfigDict
 
 
 class SecretConfig(BaseModel):
@@ -28,6 +28,8 @@ class ProjectConfig(BaseModel):
 class EnvironmentConfig(BaseModel):
     """Configuration for an environment (staging, prod, etc.)."""
 
+    model_config = ConfigDict(extra="allow")
+
     name: str
     gcp_project: str
     prefix: Optional[str] = None
@@ -42,6 +44,45 @@ class EnvironmentConfig(BaseModel):
         if v is None and "name" in info.data:
             return f"botmaro-{info.data['name']}"
         return v or ""
+
+    def get_all_secret_categories(self) -> Dict[str, List[SecretConfig]]:
+        """
+        Get all secret categories (any field ending with _secrets).
+
+        Returns:
+            Dict mapping category names to lists of SecretConfig objects.
+            Example: {'global_secrets': [...], 'serverside_secrets': [...]}
+        """
+        secret_categories = {}
+
+        # Iterate through all model fields
+        for field_name in self.__class__.model_fields.keys():
+            if field_name.endswith("_secrets"):
+                value = getattr(self, field_name, [])
+                if isinstance(value, list):
+                    # Parse list items as SecretConfig if they're dicts
+                    parsed_secrets = []
+                    for item in value:
+                        if isinstance(item, dict):
+                            parsed_secrets.append(SecretConfig(**item))
+                        elif isinstance(item, SecretConfig):
+                            parsed_secrets.append(item)
+                    secret_categories[field_name] = parsed_secrets
+
+        # Also check extra fields (fields not defined in model)
+        if hasattr(self, "__pydantic_extra__") and self.__pydantic_extra__:
+            for field_name, value in self.__pydantic_extra__.items():
+                if field_name.endswith("_secrets") and isinstance(value, list):
+                    # Parse list items as SecretConfig
+                    parsed_secrets = []
+                    for item in value:
+                        if isinstance(item, dict):
+                            parsed_secrets.append(SecretConfig(**item))
+                        elif isinstance(item, SecretConfig):
+                            parsed_secrets.append(item)
+                    secret_categories[field_name] = parsed_secrets
+
+        return secret_categories
 
 
 class SecretsConfig(BaseModel):

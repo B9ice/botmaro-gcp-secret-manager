@@ -225,26 +225,30 @@ class SecretsValidator:
             elif workflow_path.is_dir():
                 result.workflow_secrets = self.extract_secrets_from_workflows(workflow_path)
 
-        # Check environment-level secrets
-        for secret_config in env_config.global_secrets:
-            secret_name = f"{prefix}--{secret_config.name}"
+        # Check environment-level secrets from all secret categories
+        secret_categories = env_config.get_all_secret_categories()
+        for category_name, secret_configs in secret_categories.items():
+            for secret_config in secret_configs:
+                secret_name = f"{prefix}--{secret_config.name}"
 
-            # Check if secret exists
-            value = self.gsm.get_secret_version(secret_name)
-            if value is None:
-                result.missing_secrets.append(secret_config.name)
-            elif self.check_placeholder_value(value):
-                result.placeholder_secrets.append((secret_config.name, value))
+                # Check if secret exists
+                value = self.gsm.get_secret_version(secret_name)
+                if value is None:
+                    result.missing_secrets.append(secret_config.name)
+                elif self.check_placeholder_value(value):
+                    result.placeholder_secrets.append((secret_config.name, value))
 
-            # Check service account access
-            for sa in env_config.service_accounts:
-                if self.check_placeholder_sa(sa):
-                    if sa not in result.placeholder_service_accounts:
-                        result.placeholder_service_accounts.append(sa)
-                else:
-                    member = f"serviceAccount:{sa}" if not sa.startswith("serviceAccount:") else sa
-                    if not self.gsm.has_access(secret_name, member):
-                        result.missing_sa_access.append((secret_config.name, sa))
+                # Check service account access
+                for sa in env_config.service_accounts:
+                    if self.check_placeholder_sa(sa):
+                        if sa not in result.placeholder_service_accounts:
+                            result.placeholder_service_accounts.append(sa)
+                    else:
+                        member = (
+                            f"serviceAccount:{sa}" if not sa.startswith("serviceAccount:") else sa
+                        )
+                        if not self.gsm.has_access(secret_name, member):
+                            result.missing_sa_access.append((secret_config.name, sa))
 
         # Check project-specific secrets
         if project:
@@ -283,7 +287,12 @@ class SecretsValidator:
 
         # Check if workflow secrets are defined in config
         if result.workflow_secrets:
-            defined_secrets = {s.name for s in env_config.global_secrets}
+            # Get all defined secrets from all secret categories
+            defined_secrets = set()
+            secret_categories = env_config.get_all_secret_categories()
+            for category_name, secret_configs in secret_categories.items():
+                defined_secrets.update({s.name for s in secret_configs})
+
             if project:
                 project_config = env_config.projects.get(project)
                 if project_config:
