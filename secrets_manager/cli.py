@@ -769,6 +769,262 @@ def check(
         raise typer.Exit(code=1)
 
 
+@app.command(name="import")
+def import_secrets(
+    env: str = typer.Argument(..., help="Environment name (e.g., staging, prod)"),
+    file: str = typer.Option(..., "--file", "-f", help="Path to import file (.env, .json, .yml)"),
+    config: str = typer.Option(
+        "./secrets.yml", "--config", "-c", help="Path to secrets config file (default: ./secrets.yml)"
+    ),
+    project: Optional[str] = typer.Option(
+        None, "--project", "-p", help="Project name to scope imported secrets"
+    ),
+    dry_run: bool = typer.Option(
+        False, "--dry-run", help="Preview what would be imported without making changes"
+    ),
+    skip_placeholders: bool = typer.Option(
+        True, "--skip-placeholders/--no-skip-placeholders",
+        help="Skip secrets with placeholder values"
+    ),
+    force: bool = typer.Option(False, "--force", help="Skip confirmation prompt"),
+    grant: Optional[List[str]] = typer.Option(
+        None, "--grant", "-g", help="Service accounts to grant access"
+    ),
+):
+    """
+    Import secrets from a file into Google Secret Manager.
+
+    Supports multiple file formats: .env, .json, .yml/.yaml
+    Validates secrets against the schema defined in secrets.yml.
+
+    Examples:
+        \\b
+        # Import from .env file (assumes ./secrets.yml exists)
+        secrets-manager import staging --file .env.staging
+
+        \\b
+        # Import from JSON file
+        secrets-manager import staging --file secrets.json
+
+        \\b
+        # Import from YAML file with custom config
+        secrets-manager import prod --file env.yml --config /path/to/secrets.yml
+
+        \\b
+        # Dry run to preview changes
+        secrets-manager import staging --file .env.staging --dry-run
+
+        \\b
+        # Import with project scope
+        secrets-manager import staging --file myapp.env --project myapp
+
+        \\b
+        # Grant access to service accounts during import
+        secrets-manager import staging --file .env --grant bot@project.iam.gserviceaccount.com
+    """
+    import json
+    import yaml
+
+    try:
+        # Check if config file exists
+        config_path = Path(config)
+        if not config_path.exists():
+            console.print(
+                f"[red]✗ Error:[/red] Config file '{config}' not found",
+                style="bold red"
+            )
+            console.print(f"\nPlease ensure secrets.yml exists in the current directory,")
+            console.print(f"or specify a custom config path with --config")
+            raise typer.Exit(code=1)
+
+        # Set config path
+        os.environ["SECRETS_CONFIG_PATH"] = config
+
+        manager = SecretsManager()
+
+        # Check if import file exists
+        file_path = Path(file)
+        if not file_path.exists():
+            console.print(f"[red]✗ Error:[/red] File '{file}' not found", style="bold red")
+            raise typer.Exit(code=1)
+
+        # Parse file based on extension
+        console.print(f"[bold]Loading secrets from:[/bold] {file}")
+        secrets_data = {}
+
+        file_ext = file_path.suffix.lower()
+
+        try:
+            if file_ext in ['.json']:
+                # Parse JSON file
+                with open(file_path, 'r') as f:
+                    secrets_data = json.load(f)
+                    if not isinstance(secrets_data, dict):
+                        raise ValueError("JSON file must contain a key-value object")
+
+            elif file_ext in ['.yml', '.yaml']:
+                # Parse YAML file
+                with open(file_path, 'r') as f:
+                    secrets_data = yaml.safe_load(f)
+                    if not isinstance(secrets_data, dict):
+                        raise ValueError("YAML file must contain a key-value mapping")
+
+            elif file_ext in ['.env', ''] or file_path.name.startswith('.env'):
+                # Parse .env file
+                with open(file_path, 'r') as f:
+                    for line_num, line in enumerate(f, 1):
+                        line = line.strip()
+
+                        # Skip empty lines and comments
+                        if not line or line.startswith('#'):
+                            continue
+
+                        # Parse KEY=VALUE
+                        if '=' in line:
+                            key, value = line.split('=', 1)
+                            key = key.strip()
+                            value = value.strip()
+
+                            # Remove quotes if present
+                            if value and len(value) >= 2:
+                                if (value[0] == '"' and value[-1] == '"') or \
+                                   (value[0] == "'" and value[-1] == "'"):
+                                    value = value[1:-1]
+
+                            secrets_data[key] = value
+                        else:
+                            console.print(
+                                f"[yellow]⚠[/yellow]  Skipping malformed line {line_num}: {line[:50]}"
+                            )
+            else:
+                console.print(
+                    f"[red]✗ Error:[/red] Unsupported file format '{file_ext}'",
+                    style="bold red"
+                )
+                console.print("Supported formats: .env, .json, .yml, .yaml")
+                raise typer.Exit(code=1)
+
+        except (json.JSONDecodeError, yaml.YAMLError) as e:
+            console.print(f"[red]✗ Error:[/red] Failed to parse {file}: {str(e)}", style="bold red")
+            raise typer.Exit(code=1)
+
+        if not secrets_data:
+            console.print("[yellow]⚠[/yellow]  No secrets found in file", style="bold yellow")
+            raise typer.Exit(code=0)
+
+        # Filter out placeholders if enabled
+        placeholder_keywords = ['placeholder', 'todo', 'changeme', 'fixme', 'xxx', 'replace']
+        filtered_secrets = {}
+        skipped_secrets = []
+
+        for key, value in secrets_data.items():
+            # Convert value to string if needed
+            value_str = str(value) if value is not None else ""
+
+            # Check for empty or placeholder values
+            if not value_str or (skip_placeholders and any(
+                keyword in value_str.lower() for keyword in placeholder_keywords
+            )):
+                skipped_secrets.append((key, value_str or "<empty>"))
+            else:
+                filtered_secrets[key] = value_str
+
+        # Display what will be imported
+        console.print(f"\n[bold]Import Summary:[/bold]")
+        console.print(f"  Environment: [cyan]{env}[/cyan]")
+        if project:
+            console.print(f"  Project: [cyan]{project}[/cyan]")
+        console.print(f"  Secrets to import: [green]{len(filtered_secrets)}[/green]")
+
+        if skipped_secrets:
+            console.print(f"  Skipped (placeholders/empty): [yellow]{len(skipped_secrets)}[/yellow]")
+
+        # Show secrets that will be imported
+        console.print(f"\n[bold]Secrets to import:[/bold]")
+        table = Table()
+        table.add_column("Secret Name", style="cyan")
+        table.add_column("Value Preview", style="green")
+
+        for key, value in list(filtered_secrets.items())[:20]:  # Show first 20
+            masked = f"{value[:10]}..." if len(value) > 10 else value
+            table.add_row(key, masked)
+
+        console.print(table)
+
+        if len(filtered_secrets) > 20:
+            console.print(f"  ... and {len(filtered_secrets) - 20} more")
+
+        # Show skipped secrets if any
+        if skipped_secrets and len(skipped_secrets) <= 10:
+            console.print(f"\n[bold yellow]Skipped secrets:[/bold yellow]")
+            for key, value in skipped_secrets:
+                console.print(f"  • {key}: {value[:50]}")
+        elif skipped_secrets:
+            console.print(f"\n[bold yellow]Skipped {len(skipped_secrets)} placeholder/empty secrets[/bold yellow]")
+
+        # Dry run check
+        if dry_run:
+            console.print("\n[bold blue]🔍 DRY RUN - No changes will be made[/bold blue]")
+            raise typer.Exit(code=0)
+
+        # Confirm import
+        if not force:
+            console.print()
+            confirm = typer.confirm(
+                f"Import {len(filtered_secrets)} secrets to {env}" +
+                (f".{project}" if project else "") + "?"
+            )
+            if not confirm:
+                console.print("Cancelled")
+                raise typer.Exit(code=0)
+
+        # Import secrets
+        console.print("\n[bold]Importing secrets...[/bold]")
+        success_count = 0
+        failed_count = 0
+        failed_secrets = []
+
+        with console.status("[bold green]Importing secrets..."):
+            for secret_name, secret_value in filtered_secrets.items():
+                try:
+                    result = manager.set_secret(
+                        env=env,
+                        secret=secret_name,
+                        value=secret_value,
+                        project=project,
+                        grant_to=grant,
+                    )
+                    success_count += 1
+                    target = f"{env}.{project}.{secret_name}" if project else f"{env}.{secret_name}"
+                    console.print(f"  [green]✓[/green] {target} ({result['status']})")
+                except Exception as e:
+                    failed_count += 1
+                    failed_secrets.append((secret_name, str(e)))
+                    console.print(f"  [red]✗[/red] {secret_name}: {str(e)}")
+
+        # Summary
+        console.print("\n[bold]Import Summary:[/bold]")
+        console.print(f"  [green]✓[/green] Successfully imported: {success_count}")
+        if failed_count > 0:
+            console.print(f"  [red]✗[/red] Failed: {failed_count}")
+
+        if failed_secrets:
+            console.print("\n[bold red]Failed secrets:[/bold red]")
+            for secret_name, error in failed_secrets:
+                console.print(f"  • {secret_name}: {error}")
+
+        # Exit with appropriate code
+        if failed_count > 0:
+            raise typer.Exit(code=1)
+        else:
+            console.print("\n[green]✅ Import completed successfully![/green]")
+            raise typer.Exit(code=0)
+
+    except Exception as e:
+        console.print(f"[red]✗ Error:[/red] {str(e)}", style="bold red")
+        raise typer.Exit(code=1)
+
+
 @app.command()
 def version():
     """Show version information."""

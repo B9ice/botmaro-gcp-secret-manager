@@ -9,6 +9,7 @@ A standalone, environment-aware secret management tool built on Google Secret Ma
 - 🔄 **Version control** - Leverage GSM's built-in versioning
 - 🚀 **CI/CD ready** - Bootstrap secrets in GitHub Actions or any CI/CD pipeline
 - 📤 **Multiple export formats** - Export secrets in dotenv, JSON, YAML, GitHub Actions, and shell formats
+- 📥 **Bulk import** - Import secrets from .env, JSON, or YAML files with automatic placeholder detection
 - 🔗 **GitHub Actions integration** - Native composite action for seamless workflow integration
 - 🛠️ **CRUD operations** - Full create, read, update, delete support via CLI
 - ✅ **Validation & checks** - Validate secrets before deployment, detect placeholders
@@ -290,6 +291,70 @@ source load-secrets.sh
 - Load secrets into GitHub Actions workflows
 - Create shell scripts for environment setup
 - Generate JSON/YAML for application configuration
+
+#### Import Command
+
+Import secrets from files into Google Secret Manager:
+
+```bash
+secrets-manager import <environment> [OPTIONS]
+
+Options:
+  --file, -f TEXT              Path to import file (.env, .json, .yml) [required]
+  --config, -c TEXT            Path to secrets config file [default: ./secrets.yml]
+  --project, -p TEXT           Project name to scope imported secrets
+  --dry-run                    Preview what would be imported without making changes
+  --skip-placeholders/--no-skip-placeholders   Skip secrets with placeholder values [default: True]
+  --force                      Skip confirmation prompt
+  --grant, -g TEXT             Service account to grant access (can be repeated)
+```
+
+**Supported File Formats:**
+- `.env` - Standard environment file format (KEY=value)
+- `.json` - JSON object with key-value pairs
+- `.yml` / `.yaml` - YAML file with key-value mappings
+
+**Examples:**
+
+```bash
+# Import from .env file (assumes ./secrets.yml exists)
+secrets-manager import staging --file .env.staging
+
+# Import from JSON file
+secrets-manager import staging --file secrets.json
+
+# Import from YAML file
+secrets-manager import prod --file env.yml
+
+# Dry run to preview changes
+secrets-manager import staging --file .env.staging --dry-run
+
+# Import with project scope
+secrets-manager import staging --file myapp.env --project myapp
+
+# Import and grant access to service accounts
+secrets-manager import staging --file .env \
+  --grant bot@project.iam.gserviceaccount.com
+
+# Use custom config file
+secrets-manager import staging --file .env --config /path/to/secrets.yml
+
+# Import including placeholders (not recommended)
+secrets-manager import staging --file .env --no-skip-placeholders
+```
+
+**Features:**
+- Automatically detects and skips placeholder values (PLACEHOLDER, TODO, CHANGEME, etc.)
+- Supports quoted values in .env files
+- Preview secrets before importing with masked values
+- Detailed progress reporting with success/failure counts
+- Validates file format and provides helpful error messages
+
+**Use Cases:**
+- Initial setup: Import existing secrets from .env files
+- Migration: Move secrets from another system
+- Bulk updates: Update multiple secrets at once
+- Project onboarding: Quickly set up secrets for new team members
 
 #### Grant Access Command
 
