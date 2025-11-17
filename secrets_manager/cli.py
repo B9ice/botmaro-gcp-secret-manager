@@ -774,7 +774,10 @@ def import_secrets(
     env: str = typer.Argument(..., help="Environment name (e.g., staging, prod)"),
     file: str = typer.Option(..., "--file", "-f", help="Path to import file (.env, .json, .yml)"),
     config: str = typer.Option(
-        "./secrets.yml", "--config", "-c", help="Path to secrets config file (default: ./secrets.yml)"
+        "./secrets.yml",
+        "--config",
+        "-c",
+        help="Path to secrets config file (default: ./secrets.yml)",
     ),
     project: Optional[str] = typer.Option(
         None, "--project", "-p", help="Project name to scope imported secrets"
@@ -783,8 +786,9 @@ def import_secrets(
         False, "--dry-run", help="Preview what would be imported without making changes"
     ),
     skip_placeholders: bool = typer.Option(
-        True, "--skip-placeholders/--no-skip-placeholders",
-        help="Skip secrets with placeholder values"
+        True,
+        "--skip-placeholders/--no-skip-placeholders",
+        help="Skip secrets with placeholder values",
     ),
     force: bool = typer.Option(False, "--force", help="Skip confirmation prompt"),
     grant: Optional[List[str]] = typer.Option(
@@ -829,10 +833,7 @@ def import_secrets(
         # Check if config file exists
         config_path = Path(config)
         if not config_path.exists():
-            console.print(
-                f"[red]✗ Error:[/red] Config file '{config}' not found",
-                style="bold red"
-            )
+            console.print(f"[red]✗ Error:[/red] Config file '{config}' not found", style="bold red")
             console.print(f"\nPlease ensure secrets.yml exists in the current directory,")
             console.print(f"or specify a custom config path with --config")
             raise typer.Exit(code=1)
@@ -855,40 +856,41 @@ def import_secrets(
         file_ext = file_path.suffix.lower()
 
         try:
-            if file_ext in ['.json']:
+            if file_ext in [".json"]:
                 # Parse JSON file
-                with open(file_path, 'r') as f:
+                with open(file_path, "r") as f:
                     secrets_data = json.load(f)
                     if not isinstance(secrets_data, dict):
                         raise ValueError("JSON file must contain a key-value object")
 
-            elif file_ext in ['.yml', '.yaml']:
+            elif file_ext in [".yml", ".yaml"]:
                 # Parse YAML file
-                with open(file_path, 'r') as f:
+                with open(file_path, "r") as f:
                     secrets_data = yaml.safe_load(f)
                     if not isinstance(secrets_data, dict):
                         raise ValueError("YAML file must contain a key-value mapping")
 
-            elif file_ext in ['.env', ''] or file_path.name.startswith('.env'):
+            elif file_ext in [".env", ""] or file_path.name.startswith(".env"):
                 # Parse .env file
-                with open(file_path, 'r') as f:
+                with open(file_path, "r") as f:
                     for line_num, line in enumerate(f, 1):
                         line = line.strip()
 
                         # Skip empty lines and comments
-                        if not line or line.startswith('#'):
+                        if not line or line.startswith("#"):
                             continue
 
                         # Parse KEY=VALUE
-                        if '=' in line:
-                            key, value = line.split('=', 1)
+                        if "=" in line:
+                            key, value = line.split("=", 1)
                             key = key.strip()
                             value = value.strip()
 
                             # Remove quotes if present
                             if value and len(value) >= 2:
-                                if (value[0] == '"' and value[-1] == '"') or \
-                                   (value[0] == "'" and value[-1] == "'"):
+                                if (value[0] == '"' and value[-1] == '"') or (
+                                    value[0] == "'" and value[-1] == "'"
+                                ):
                                     value = value[1:-1]
 
                             secrets_data[key] = value
@@ -898,8 +900,7 @@ def import_secrets(
                             )
             else:
                 console.print(
-                    f"[red]✗ Error:[/red] Unsupported file format '{file_ext}'",
-                    style="bold red"
+                    f"[red]✗ Error:[/red] Unsupported file format '{file_ext}'", style="bold red"
                 )
                 console.print("Supported formats: .env, .json, .yml, .yaml")
                 raise typer.Exit(code=1)
@@ -913,7 +914,7 @@ def import_secrets(
             raise typer.Exit(code=0)
 
         # Filter out placeholders if enabled
-        placeholder_keywords = ['placeholder', 'todo', 'changeme', 'fixme', 'xxx', 'replace']
+        placeholder_keywords = ["placeholder", "todo", "changeme", "fixme", "xxx", "replace"]
         filtered_secrets = {}
         skipped_secrets = []
 
@@ -922,9 +923,10 @@ def import_secrets(
             value_str = str(value) if value is not None else ""
 
             # Check for empty or placeholder values
-            if not value_str or (skip_placeholders and any(
-                keyword in value_str.lower() for keyword in placeholder_keywords
-            )):
+            if not value_str or (
+                skip_placeholders
+                and any(keyword in value_str.lower() for keyword in placeholder_keywords)
+            ):
                 skipped_secrets.append((key, value_str or "<empty>"))
             else:
                 filtered_secrets[key] = value_str
@@ -937,7 +939,9 @@ def import_secrets(
         console.print(f"  Secrets to import: [green]{len(filtered_secrets)}[/green]")
 
         if skipped_secrets:
-            console.print(f"  Skipped (placeholders/empty): [yellow]{len(skipped_secrets)}[/yellow]")
+            console.print(
+                f"  Skipped (placeholders/empty): [yellow]{len(skipped_secrets)}[/yellow]"
+            )
 
         # Show secrets that will be imported
         console.print(f"\n[bold]Secrets to import:[/bold]")
@@ -960,7 +964,9 @@ def import_secrets(
             for key, value in skipped_secrets:
                 console.print(f"  • {key}: {value[:50]}")
         elif skipped_secrets:
-            console.print(f"\n[bold yellow]Skipped {len(skipped_secrets)} placeholder/empty secrets[/bold yellow]")
+            console.print(
+                f"\n[bold yellow]Skipped {len(skipped_secrets)} placeholder/empty secrets[/bold yellow]"
+            )
 
         # Dry run check
         if dry_run:
@@ -971,8 +977,9 @@ def import_secrets(
         if not force:
             console.print()
             confirm = typer.confirm(
-                f"Import {len(filtered_secrets)} secrets to {env}" +
-                (f".{project}" if project else "") + "?"
+                f"Import {len(filtered_secrets)} secrets to {env}"
+                + (f".{project}" if project else "")
+                + "?"
             )
             if not confirm:
                 console.print("Cancelled")
