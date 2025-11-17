@@ -99,25 +99,28 @@ class SecretsManager:
         if deployer_sa:
             service_accounts_to_grant.add(deployer_sa)
 
-        # Load global secrets
-        for secret_config in env_config.global_secrets:
-            secret_name = self._get_secret_name(env, None, secret_config.name)
-            value = gsm.get_secret_version(secret_name)
+        # Load all secret categories (global_secrets, serverside_secrets, etc.)
+        secret_categories = env_config.get_all_secret_categories()
 
-            if value is None:
-                if secret_config.required and secret_config.default is None:
-                    raise ValueError(f"Required secret '{secret_name}' not found")
-                value = secret_config.default or ""
+        for category_name, secret_configs in secret_categories.items():
+            for secret_config in secret_configs:
+                secret_name = self._get_secret_name(env, None, secret_config.name)
+                value = gsm.get_secret_version(secret_name)
 
-            secrets[secret_config.name] = value
+                if value is None:
+                    if secret_config.required and secret_config.default is None:
+                        raise ValueError(f"Required secret '{secret_name}' not found")
+                    value = secret_config.default or ""
 
-            if export_to_env:
-                os.environ[secret_config.name] = value
+                secrets[secret_config.name] = value
 
-            # Grant access to configured service accounts
-            for sa in service_accounts_to_grant:
-                member = f"serviceAccount:{sa}" if not sa.startswith("serviceAccount:") else sa
-                gsm.ensure_access(secret_name, member)
+                if export_to_env:
+                    os.environ[secret_config.name] = value
+
+                # Grant access to configured service accounts
+                for sa in service_accounts_to_grant:
+                    member = f"serviceAccount:{sa}" if not sa.startswith("serviceAccount:") else sa
+                    gsm.ensure_access(secret_name, member)
 
         # Load project-specific secrets if project is specified
         if project:

@@ -7,6 +7,26 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.4.2] - 2025-01-17
+
+### Fixed
+- **Support for multiple secret categories in secrets.yml**
+  - Fixed bug where only `global_secrets` section was read from config files
+  - Now correctly reads ALL sections ending with `_secrets` (e.g., `serverside_secrets`, `mobile_secrets`, `api_secrets`, etc.)
+  - Updated `EnvironmentConfig.get_all_secret_categories()` to scan for all `*_secrets` fields
+  - Updated `bootstrap()` command to load secrets from all categories
+  - Updated `validate_secrets()` in validator to check all secret categories
+  - Fixed Pydantic v2.11 deprecation warning by accessing `model_fields` from class instead of instance
+  - Added comprehensive test suite for multiple secret categories
+  - Maintains backward compatibility with configs that only have `global_secrets`
+
+### Added
+- New test file `tests/test_multiple_secret_categories.py` with 4 test cases covering:
+  - Multiple secret categories support
+  - Secret naming consistency across categories
+  - Empty secret categories handling
+  - Backward compatibility with `global_secrets` only configs
+
 ## [0.4.1] - 2025-01-16
 
 ### Fixed
@@ -148,7 +168,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Secret value masking in CLI output by default
 - Support for reading secrets from stdin for security
 
-[Unreleased]: https://github.com/B9ice/botmaro-gcp-secret-manager/compare/v0.4.1...HEAD
+[Unreleased]: https://github.com/B9ice/botmaro-gcp-secret-manager/compare/v0.4.2...HEAD
+[0.4.2]: https://github.com/B9ice/botmaro-gcp-secret-manager/compare/v0.4.1...v0.4.2
 [0.4.1]: https://github.com/B9ice/botmaro-gcp-secret-manager/compare/v0.4.0...v0.4.1
 [0.4.0]: https://github.com/B9ice/botmaro-gcp-secret-manager/compare/v0.3.0...v0.4.0
 [0.3.0]: https://github.com/B9ice/botmaro-gcp-secret-manager/compare/v0.2.0...v0.3.0
