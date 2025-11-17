@@ -7,6 +7,32 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.4.0] - 2025-01-16
+
+### Added
+- **Secret Import Command (`import` command)**
+  - New `secrets-manager import` command for bulk secret imports from files
+  - Support for multiple file formats: .env, JSON (.json), YAML (.yml, .yaml)
+  - Automatic placeholder detection and filtering (skips PLACEHOLDER, TODO, CHANGEME, etc.)
+  - `--dry-run` flag for previewing changes without importing
+  - `--skip-placeholders` flag to control placeholder filtering behavior
+  - `--force` flag to skip confirmation prompts
+  - `--grant` flag to assign service account access during import
+  - `--project` flag for importing to project-scoped secrets
+  - Intelligent parsing of .env files with quote handling
+  - Progress tracking with success/failure counts and detailed error reporting
+  - Import summary table showing preview of secrets to be imported
+  - Graceful error handling for missing or malformed files
+
+### Changed
+- `--config` option now defaults to `./secrets.yml` across all commands
+- Improved error messages when config file is not found
+- Better file format detection for .env files (including files starting with .env)
+
+### Security
+- Automatic masking of secret values in import preview (shows first 10 characters)
+- Skip empty or placeholder values by default to prevent accidental placeholder imports
+
 ## [0.3.0] - 2025-01-10
 
 ### Added
@@ -113,7 +139,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Secret value masking in CLI output by default
 - Support for reading secrets from stdin for security
 
-[Unreleased]: https://github.com/B9ice/botmaro-gcp-secret-manager/compare/v0.3.0...HEAD
+[Unreleased]: https://github.com/B9ice/botmaro-gcp-secret-manager/compare/v0.4.0...HEAD
+[0.4.0]: https://github.com/B9ice/botmaro-gcp-secret-manager/compare/v0.3.0...v0.4.0
 [0.3.0]: https://github.com/B9ice/botmaro-gcp-secret-manager/compare/v0.2.0...v0.3.0
 [0.2.0]: https://github.com/B9ice/botmaro-gcp-secret-manager/compare/v0.1.0...v0.2.0
 [0.1.0]: https://github.com/B9ice/botmaro-gcp-secret-manager/releases/tag/v0.1.0
